@@ -1,0 +1,1205 @@
+Build a complete, production-ready **React + TypeScript web application** called:
+
+# MEESHO PROFIT CALCULATOR
+
+This is a tool for a Meesho seller to upload their actual Meesho payment Excel report, enter their **SKU purchase cost including GST**, and accurately calculate their profit/loss.
+
+The application must be functional, not just a UI mockup.
+
+---
+
+# 1. MAIN PURPOSE
+
+The workflow should be:
+
+1. User uploads a Meesho Excel payment report.
+2. Application reads the workbook in the browser.
+3. Application identifies and processes the Meesho sheets.
+4. Application extracts orders and Supplier SKUs.
+5. User enters the **actual purchase price per unit INCLUDING GST** for each SKU.
+6. Application calculates COGS, GST, profit/loss, margins and other metrics.
+7. User can analyze profit by:
+
+   * Order
+   * SKU
+   * Product
+   * Date
+   * Month
+8. User can export the final report.
+
+The most important requirement is **accurate profit calculation using the actual Meesho payment report rather than simply calculating Selling Price − Purchase Price.**
+
+---
+
+# 2. IMPORTANT: USE THE PROVIDED MEESHO EXCEL STRUCTURE
+
+The application must be designed to work with the Meesho Excel payment report provided by the user.
+
+The workbook can contain sheets such as:
+
+* `Order Payments`
+* `Ads Cost`
+* `Referral Payments`
+* `Compensation and Recovery`
+
+The primary sheet is:
+
+`Order Payments`
+
+The application should dynamically detect the actual columns instead of hard-coding Excel column letters.
+
+The Meesho workbook may contain grouped/header rows.
+
+For example, the first row can contain category/group names while the following row contains actual field names.
+
+Therefore:
+
+**DO NOT assume row 1 contains the real column headers.**
+
+Automatically detect the row containing fields such as:
+
+* Sub Order No
+* Order Date
+* Supplier SKU
+* Quantity
+* Final Settlement Amount
+
+Then use that row as the actual header row.
+
+---
+
+# 3. ORDER PAYMENTS DATA
+
+From `Order Payments`, extract wherever available:
+
+### Order information
+
+* Sub Order No
+* Order Date
+* Dispatch Date
+* Product Name
+* Supplier SKU
+* Catalog ID
+* Order source
+* Live Order Status
+
+### Pricing
+
+* Listing Price (Incl. taxes)
+* Quantity
+* Total Sale Amount (Incl. Shipping & GST)
+* Total Sale Return Amount
+* Final Settlement Amount
+
+### Meesho charges
+
+* Meesho Commission
+* Fixed Fee
+* Warehousing Fee
+* Return Shipping Charge
+* Shipping Charge
+* Other Support Service Charges
+* Waivers
+* TCS
+* TDS
+* Compensation
+* Claims
+* Recovery
+
+### Tax
+
+* Product GST %
+* Any GST/tax fields available in the workbook
+
+Preserve all original Meesho fields for transparency.
+
+---
+
+# 4. SKU COST SYSTEM
+
+Create a page:
+
+## SKU COSTS
+
+Show:
+
+| Supplier SKU | Product Name | Units | Purchase Cost / Unit Incl. GST | GST Rate | Taxable Cost / Unit | Input GST / Unit | Total COGS |
+| ------------ | ------------ | ----: | -----------------------------: | -------: | ------------------: | ---------------: | ---------: |
+
+The user enters:
+
+**Purchase Cost / Unit INCLUDING GST**
+
+Example:
+
+SKU001
+
+Purchase cost = ₹118
+
+GST = 18%
+
+The application calculates:
+
+Taxable purchase cost = ₹100
+
+Input GST = ₹18
+
+If quantity = 3:
+
+Actual purchase amount = ₹354
+
+Taxable COGS = ₹300
+
+Input GST = ₹54
+
+---
+
+# 5. SKU COST PERSISTENCE
+
+Save SKU costs locally.
+
+Use:
+
+* localStorage for small settings
+* IndexedDB if required for larger data
+
+If the user uploads next month's report and the same Supplier SKU appears, automatically populate its previously saved purchase cost.
+
+Allow:
+
+* Add SKU
+* Edit cost
+* Delete SKU
+* Bulk import SKU costs
+* Export SKU costs
+* Import SKU costs
+
+Create a prominent warning:
+
+**X SKUs have missing purchase costs**
+
+Clicking it should show all missing SKUs.
+
+Never assume missing cost is ₹0.
+
+If cost is missing:
+
+COGS = —
+
+Profit = —
+
+Margin = —
+
+Status = Cost Missing
+
+---
+
+# 6. GST HANDLING
+
+The user enters purchase cost **INCLUDING GST**.
+
+This is extremely important.
+
+Create GST settings:
+
+* GST Registered? Yes / No
+* Purchase GST Rate
+* Selling GST Rate
+* Input Tax Credit Eligible? Yes / No
+
+Allow:
+
+0%, 5%, 12%, 18%, 28%, Custom.
+
+Do NOT automatically assume 18%.
+
+---
+
+# 7. PURCHASE GST CALCULATION
+
+If purchase price including GST is ₹118 and GST rate is 18%:
+
+Taxable Purchase Cost:
+
+`118 / 1.18 = ₹100`
+
+Input GST:
+
+`118 - 100 = ₹18`
+
+If quantity is 2:
+
+Purchase amount paid:
+
+`₹118 × 2 = ₹236`
+
+Taxable COGS:
+
+`₹100 × 2 = ₹200`
+
+Input GST:
+
+`₹18 × 2 = ₹36`
+
+If the seller is eligible for Input Tax Credit, recoverable input GST should not be treated as a permanent business expense.
+
+---
+
+# 8. SELLING GST
+
+Do NOT blindly calculate:
+
+`Final Settlement Amount / 1.18`
+
+The exact treatment must depend on the fields available in the Meesho report.
+
+First inspect the workbook for actual GST/tax fields.
+
+If Meesho provides an actual GST/tax amount relevant to the order, use that actual value.
+
+If no relevant GST amount exists and the settlement needs to be estimated as GST-inclusive, then calculate using the configured Selling GST Rate and clearly label it:
+
+**Estimated GST**
+
+Never silently make an assumption.
+
+---
+
+# 9. VERY IMPORTANT: AVOID DOUBLE COUNTING MEESHO FEES
+
+`Final Settlement Amount` is the key settlement figure.
+
+The application must NOT do this:
+
+`Final Settlement`
+− Meesho Commission
+− Shipping
+− Fixed Fee
+− Return Shipping
+− GST
+− Other Fees
+
+if those charges have already been deducted in arriving at Final Settlement Amount.
+
+That would double-count deductions.
+
+Instead:
+
+### Basic settlement profit
+
+`Final Settlement Amount - Seller COGS`
+
+Use the actual Meesho settlement figure.
+
+Display Meesho fees separately for analysis, but do not subtract them again if already reflected in Final Settlement Amount.
+
+---
+
+# 10. PROFIT CALCULATION
+
+For every order:
+
+### Seller COGS
+
+`Quantity × Purchase Cost Per Unit Including GST`
+
+Also calculate:
+
+### Taxable COGS
+
+`Quantity × Purchase Cost Excluding Recoverable GST`
+
+Then show two views.
+
+---
+
+# 11. CASH PROFIT VIEW
+
+This shows the seller's actual cash economics.
+
+### Cash Profit
+
+`Final Settlement Amount - Actual Purchase Amount Paid`
+
+Where:
+
+`Actual Purchase Amount Paid = Quantity × Purchase Cost Including GST`
+
+Example:
+
+Settlement = ₹300
+
+Quantity = 2
+
+Purchase cost including GST = ₹100/unit
+
+Purchase cost = ₹200
+
+Cash Profit = ₹100
+
+This is useful for understanding actual money remaining from the transaction.
+
+---
+
+# 12. ACCOUNTING PROFIT VIEW
+
+If the seller is GST registered and eligible for Input Tax Credit:
+
+Do not treat recoverable purchase GST as a business expense.
+
+Use GST-exclusive COGS.
+
+### Accounting COGS
+
+`Purchase Cost Including GST - Eligible Input GST`
+
+### Accounting Profit
+
+Use the applicable GST-exclusive sales value/settlement basis supported by the Meesho report, minus GST-exclusive COGS and applicable expenses.
+
+If the exact GST treatment cannot be established from the workbook, clearly label the number:
+
+**Estimated Accounting Profit**
+
+Do not pretend it is a tax-return calculation.
+
+---
+
+# 13. GST SUMMARY
+
+Create a GST section showing:
+
+* Purchase Amount Including GST
+* Input GST
+* Sales/Output GST where identifiable
+* Estimated GST Payable
+* GST ITC
+
+Use:
+
+`Estimated GST Payable = Output GST - Eligible Input GST`
+
+But clearly label:
+
+**Estimated GST Payable Before Other Credits/Adjustments**
+
+Do NOT present it as the user's final government GST liability.
+
+Add this disclaimer:
+
+"GST calculations are estimates based on the information available in the uploaded report and your settings. Actual GST liability depends on registration status, eligible Input Tax Credit, returns, adjustments and other transactions. Consult a CA/tax professional for tax filing."
+
+---
+
+# 14. ORDER-LEVEL PROFIT TABLE
+
+Create:
+
+## ORDERS
+
+Columns:
+
+* Order Date
+* Sub Order No
+* Product Name
+* Supplier SKU
+* Quantity
+* Order Status
+* Listing Price
+* Total Sale Amount
+* Final Settlement
+* Purchase Cost / Unit
+* Actual COGS
+* Input GST
+* Basic Cash Profit
+* Estimated Accounting Profit
+* Ad Cost
+* Net Profit
+* Profit %
+* Status
+
+Use:
+
+Green = Profit
+
+Red = Loss
+
+Yellow = Missing Cost
+
+Grey = Cancelled
+
+---
+
+# 15. PROFIT %
+
+Calculate:
+
+`Profit % = Profit / COGS × 100`
+
+If COGS = 0 or missing:
+
+show:
+
+`—`
+
+Do not divide by zero.
+
+Also show:
+
+### Margin %
+
+`Profit / applicable sales or settlement value × 100`
+
+Keep **Profit % / ROI** and **Margin %** as separate metrics so they are not confused.
+
+---
+
+# 16. RETURNS, RTO AND CANCELLED ORDERS
+
+Detect statuses such as:
+
+* Delivered
+* Shipped
+* Cancelled
+* Returned
+* RTO
+* Other
+
+Do not count cancelled orders as successful sales.
+
+For returned/RTO orders, use the actual settlement and charges shown in the Meesho report.
+
+Do not invent return costs.
+
+Create filters for:
+
+* Delivered
+* Returned
+* RTO
+* Cancelled
+* Other
+
+Dashboard should show:
+
+* Successful Orders
+* Returns
+* RTO
+* Cancellations
+* Return Rate
+* RTO Rate
+
+---
+
+# 17. ADVERTISING
+
+Process:
+
+`Ads Cost`
+
+where available.
+
+Extract:
+
+* Deduction Duration
+* Deduction Date
+* Campaign ID
+* Ad Cost
+* Credits
+* Waivers
+* Discounts
+* Ad Cost incl. Credits/Waivers/Discounts
+* GST
+* Total Ads Cost
+
+Dashboard:
+
+* Total Ad Spend
+* Campaigns
+* Average Daily Ad Spend
+* Ad Spend by Date
+* Ad Spend by Campaign
+
+---
+
+# 18. AD COST ALLOCATION
+
+Do NOT assign the entire advertising bill to every order.
+
+Create settings:
+
+### Advertising Allocation
+
+1. Do not include Ads
+2. Equal allocation across ad-attributed orders
+3. Allocate by order value
+4. Allocate by quantity
+
+Clearly label allocated costs:
+
+**Estimated Ad Allocation**
+
+Then:
+
+`Net Profit = Basic Profit - Estimated Ad Cost`
+
+Keep:
+
+**Basic Profit**
+
+and:
+
+**Net Profit**
+
+separate.
+
+---
+
+# 19. REFERRAL PAYMENTS
+
+Read:
+
+`Referral Payments`
+
+Show:
+
+* Total Referral Income
+* Number of payments
+* Referral income by date
+* Referral income by reason
+
+Do NOT attach referral income to an order unless there is a reliable order identifier.
+
+Include it separately in the overall business summary.
+
+---
+
+# 20. COMPENSATION & RECOVERY
+
+Read:
+
+`Compensation and Recovery`
+
+Show:
+
+* Total Compensation
+* Total Recovery
+* Net Compensation/Recovery
+* Date
+* Program
+* Reason
+* Amount
+
+Only attach these to individual orders when there is a reliable order relationship.
+
+---
+
+# 21. MAIN DASHBOARD
+
+Create a professional dashboard.
+
+Top KPI cards:
+
+### Total Orders
+
+### Units Sold
+
+### Total Sales
+
+### Total Meesho Settlement
+
+### Total Purchase Cost
+
+### Total COGS
+
+### Gross/Cash Profit
+
+### Advertising Spend
+
+### Net Profit
+
+### Profit Margin
+
+### Return Rate
+
+### RTO Rate
+
+### Missing SKU Costs
+
+Use Indian Rupee formatting:
+
+`₹1,25,000.00`
+
+---
+
+# 22. PROFIT DEFINITION
+
+Clearly show this on the dashboard.
+
+### Basic Cash Profit
+
+**Meesho Final Settlement − Actual Purchase Cost**
+
+### Net Profit
+
+**Basic Profit − Allocated Advertising Cost + Applicable Additional Income/Adjustments**
+
+GST should be displayed separately and should not be incorrectly counted as profit.
+
+---
+
+# 23. SKU ANALYSIS
+
+Create:
+
+## SKU ANALYSIS
+
+Table:
+
+| SKU | Product | Units | Sales | Settlement | Purchase Cost | COGS | Ad Cost | Profit | Margin | ROI |
+| --- | ------- | ----: | ----: | ---------: | ------------: | ---: | ------: | -----: | -----: | --: |
+
+Sort by:
+
+* Highest Profit
+* Lowest Profit
+* Highest Margin
+* Lowest Margin
+* Highest Sales
+* Highest Units
+* Highest ROI
+
+Click a SKU to see all its orders.
+
+---
+
+# 24. BREAK-EVEN CALCULATOR
+
+Create an additional tool:
+
+## BREAK-EVEN
+
+User selects a SKU.
+
+Show:
+
+* Purchase cost including GST
+* GST rate
+* Current Meesho settlement
+* Current profit
+* Current margin
+
+Allow user to enter desired profit:
+
+Example:
+
+**I want ₹100 profit per unit**
+
+Calculate the required settlement/selling price based on the available Meesho data.
+
+Clearly distinguish:
+
+* Desired profit
+* Required settlement
+* Estimated required selling price
+
+If the exact Meesho fees cannot be reliably predicted from historical data, label the result as an estimate.
+
+---
+
+# 25. MONTHLY ANALYSIS
+
+Allow multiple Excel reports.
+
+Example:
+
+August 2026
+September 2026
+October 2026
+
+Prevent duplicate orders using:
+
+`Sub Order No`
+
+Allow:
+
+* Current month
+* All months
+* Custom date range
+
+Create monthly comparison:
+
+| Metric     | August | September | Change |
+| ---------- | -----: | --------: | -----: |
+| Orders     |        |           |        |
+| Sales      |        |           |        |
+| Settlement |        |           |        |
+| COGS       |        |           |        |
+| Ad Spend   |        |           |        |
+| Profit     |        |           |        |
+| Margin     |        |           |        |
+
+---
+
+# 26. CHARTS
+
+Use Recharts.
+
+Create:
+
+1. Settlement vs COGS over time
+2. Profit over time
+3. Sales by SKU
+4. Profit by SKU
+5. Top 10 profitable SKUs
+6. Top 10 loss-making SKUs
+7. Ad spend over time
+8. Order status distribution
+9. Monthly profit
+10. Return/RTO trend
+
+Charts should have tooltips and responsive sizing.
+
+---
+
+# 27. IMPORT PAGE
+
+Create:
+
+## IMPORT DATA
+
+Drag-and-drop Excel upload.
+
+Accept:
+
+`.xlsx`
+
+`.xls`
+
+After upload show:
+
+### Import Summary
+
+* File name
+* Sheets found
+* Orders found
+* Valid orders
+* Duplicate orders
+* Missing SKU
+* Missing settlement
+* Unique SKUs
+* Total quantity
+* Date range
+
+Then:
+
+**Import Data**
+
+button.
+
+Do not overwrite existing data without confirmation.
+
+---
+
+# 28. MULTI-SHEET PARSER
+
+Use SheetJS:
+
+`xlsx`
+
+The parser must intelligently locate:
+
+* `Order Payments`
+* `Ads Cost`
+* `Referral Payments`
+* `Compensation and Recovery`
+
+Sheet names may vary slightly, so use case-insensitive matching where appropriate.
+
+If a sheet is missing, do not crash the application.
+
+Show:
+
+`Ads Cost sheet not found — advertising analysis unavailable for this file.`
+
+---
+
+# 29. REQUIRED COLUMN VALIDATION
+
+For Order Payments, minimum important fields are:
+
+* Supplier SKU
+* Quantity
+* Final Settlement Amount
+
+Also identify:
+
+* Sub Order No
+* Order Date
+* Product Name
+* Live Order Status
+
+If required fields are missing, show a clear error.
+
+Example:
+
+**Unable to calculate profit because Supplier SKU was not found in the uploaded report.**
+
+---
+
+# 30. PRIVACY
+
+Process the Excel file entirely in the browser.
+
+Do NOT upload seller payment data to an external server.
+
+No backend is required for version 1.
+
+---
+
+# 31. DATA STORAGE
+
+Use IndexedDB if necessary for:
+
+* Imported orders
+* Ads
+* Referral payments
+* Compensation/recovery
+
+Use localStorage for:
+
+* SKU costs
+* GST settings
+* User preferences
+
+Add:
+
+### Backup Data
+
+Export all application data as JSON.
+
+### Restore Data
+
+Import JSON backup.
+
+---
+
+# 32. EXPORT
+
+Allow:
+
+### Export Orders
+
+Excel / CSV
+
+### Export SKU Analysis
+
+Excel / CSV
+
+### Export Profit Report
+
+Excel / CSV
+
+Profit report columns:
+
+* Order Date
+* Sub Order No
+* Product
+* SKU
+* Quantity
+* Settlement
+* Purchase Cost Incl. GST
+* Input GST
+* COGS
+* Basic Profit
+* Ad Cost
+* Net Profit
+* Margin
+* Status
+
+---
+
+# 33. USER INTERFACE
+
+Build a polished SaaS-style dashboard.
+
+Use:
+
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+* shadcn/ui
+* Recharts
+* SheetJS
+* Lucide icons
+
+Design:
+
+* Professional
+* Clean
+* Modern
+* Responsive
+* Desktop-first
+* Mobile-friendly
+
+Use:
+
+* Dark sidebar
+* White content area
+* Rounded cards
+* Subtle shadows
+* Clean typography
+* Green for profit
+* Red for loss
+* Yellow for warnings
+* Blue/neutral for information
+
+---
+
+# 34. SIDEBAR
+
+Navigation:
+
+Dashboard
+
+Orders
+
+SKU Analysis
+
+SKU Costs
+
+Advertising
+
+GST
+
+Referral Payments
+
+Compensation & Recovery
+
+Break-Even
+
+Import Data
+
+Settings
+
+---
+
+# 35. SETTINGS
+
+Create:
+
+## General
+
+Currency: INR
+
+## GST
+
+GST Registered
+
+Purchase GST Rate
+
+Selling GST Rate
+
+Input Tax Credit Eligible
+
+## Advertising
+
+Allocation method
+
+## Data
+
+Backup
+
+Restore
+
+Clear Data
+
+## Calculation
+
+Allow user to choose:
+
+* Cash Profit
+* Accounting/Estimated Profit
+* Net Profit
+
+---
+
+# 36. SAMPLE CALCULATION
+
+Example:
+
+Supplier SKU:
+
+`SKU001`
+
+Quantity:
+
+`2`
+
+Purchase Price Including GST:
+
+`₹118`
+
+Purchase GST:
+
+`18%`
+
+Meesho Final Settlement:
+
+`₹300`
+
+Calculation:
+
+Purchase amount:
+
+`₹118 × 2 = ₹236`
+
+Taxable purchase cost:
+
+`₹100 × 2 = ₹200`
+
+Input GST:
+
+`₹36`
+
+Cash Profit:
+
+`₹300 − ₹236 = ₹64`
+
+Display:
+
+**Cash Profit: ₹64**
+
+If estimated ad allocation = ₹10:
+
+**Net Cash Profit: ₹54**
+
+Do not use this sample data as hard-coded application data.
+
+---
+
+# 37. IMPORTANT ACCOUNTING DISCLAIMER
+
+Display somewhere in the GST section:
+
+"GST and profit calculations are provided for business analysis and estimation. Actual GST liability and tax treatment can depend on registration status, Input Tax Credit eligibility, product classification, returns, adjustments and other transactions. Please verify tax calculations with your CA/tax professional."
+
+---
+
+# 38. ERROR HANDLING
+
+Handle:
+
+* Invalid Excel
+* Empty file
+* Missing sheets
+* Missing columns
+* Corrupted rows
+* Duplicate orders
+* Missing SKU
+* Missing cost
+* Invalid numbers
+* Negative values
+* Empty settlement
+* Unknown status
+
+Never crash.
+
+Show useful error messages.
+
+---
+
+# 39. PERFORMANCE
+
+The application should handle large Meesho Excel files efficiently.
+
+Use:
+
+* Memoization
+* Efficient filtering
+* Pagination
+* Virtualized tables if necessary
+* IndexedDB for large datasets
+
+Do not recalculate the entire dataset unnecessarily whenever a single SKU cost changes.
+
+---
+
+# 40. CODE QUALITY
+
+Use a clean architecture:
+
+`src/`
+
+`components/`
+
+`pages/`
+
+`hooks/`
+
+`lib/`
+
+`utils/`
+
+`types/`
+
+`services/`
+
+`calculations/`
+
+Create reusable calculation functions.
+
+Example:
+
+`calculateCOGS()`
+
+`calculateCashProfit()`
+
+`calculateAccountingProfit()`
+
+`calculateGST()`
+
+`calculateAdAllocation()`
+
+`calculateNetProfit()`
+
+`aggregateBySKU()`
+
+`aggregateByMonth()`
+
+Keep calculation logic separate from UI components.
+
+---
+
+# 41. FINAL ACCEPTANCE TEST
+
+Before declaring the application complete, test it using the actual Meesho Excel file supplied with this project.
+
+Verify:
+
+1. Excel uploads successfully.
+2. `Order Payments` is correctly detected.
+3. Header row is correctly detected.
+4. Supplier SKU is correctly extracted.
+5. Quantity is correctly extracted.
+6. Final Settlement Amount is correctly extracted.
+7. All unique SKUs are displayed.
+8. User can enter purchase price INCLUDING GST.
+9. GST is correctly separated from purchase price.
+10. COGS is correctly calculated.
+11. Cash profit is correctly calculated.
+12. Missing costs are clearly identified.
+13. Orders can be filtered.
+14. SKU analysis works.
+15. Dashboard totals match the underlying order data.
+16. Ads are not double-counted.
+17. Meesho fees are not double-counted.
+18. Returns/RTO/cancellations are handled correctly.
+19. Data persists after refreshing the browser.
+20. Excel/CSV export works.
+
+Most importantly:
+
+**DO NOT build only a visual dashboard. Build the actual working calculator and test it against the uploaded Meesho Excel structure.**
+
+The application should be usable by a non-finance user without requiring them to understand accounting terminology.

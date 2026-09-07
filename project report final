@@ -1,0 +1,1060 @@
+Build a complete, production-ready **Meesho Seller Profit Calculator web application** using **React + TypeScript + Vite + Tailwind CSS + shadcn/ui**.
+
+The application must import Meesho Excel reports, allow me to enter SKU-wise purchase costs, correctly calculate profit while handling GST, ads, returns, RTO, cancelled orders, negative settlements, and provide a clear dashboard.
+
+## 1. MOST IMPORTANT: CALCULATION RULES
+
+Do NOT make assumptions about finance or invent charges.
+
+The calculator must distinguish between:
+
+### A. CASH PROFIT — MAIN PROFIT VIEW
+
+This is the primary number I want to see.
+
+For an order:
+
+**Cash Profit Before Ads = Meesho Final Settlement Amount - Purchase Cost Including GST**
+
+Then:
+
+**Net Cash Profit = Cash Profit Before Ads - Allocated Ad Cost**
+
+Purchase Cost Including GST is the actual amount I pay to my supplier.
+
+Example:
+
+Purchase price including GST = ₹35.40
+
+If GST = 18%:
+
+Taxable purchase value = ₹30.00
+Input GST = ₹5.40
+Actual cash purchase cost = ₹35.40
+
+If Meesho settlement = ₹46.37:
+
+Cash Profit Before Ads:
+
+₹46.37 - ₹35.40 = ₹10.97
+
+Do NOT subtract ₹5.40 GST again from this cash profit.
+
+---
+
+## 2. GST MUST BE INCLUDED, BUT SEPARATELY
+
+The calculator MUST support GST.
+
+However, do NOT simply subtract GST from settlement/profit.
+
+Create a separate **GST / Accounting View**.
+
+Show:
+
+* Settlement / Sales Amount
+* Output GST
+* GST-exclusive Sales
+* Purchase Cost Including GST
+* Input GST / ITC
+* GST-exclusive Purchase Cost
+* Net GST Payable
+* GST-adjusted Profit
+
+The main dashboard should use **Net Cash Profit** as the primary profit figure.
+
+GST should be displayed separately so that GST is not accidentally double-counted.
+
+### VERY IMPORTANT
+
+Do NOT blindly calculate:
+
+`Final Settlement Amount / 1.18`
+
+to determine taxable sales.
+
+Meesho's Final Settlement Amount can already contain deductions, fees, adjustments, TCS/TDS, shipping, etc.
+
+Whenever the Meesho Excel report provides actual GST/tax/sales fields, use those fields instead of guessing GST from the final settlement.
+
+Do not double-subtract Meesho fees that are already reflected in Final Settlement Amount.
+
+---
+
+# 3. MEESHO EXCEL IMPORT
+
+The application must accept the Meesho Excel payment report.
+
+The workbook may contain sheets such as:
+
+* Disclaimer
+* Order Payments
+* Ads Cost
+* Referral Payments
+* Compensation and Recovery
+
+The `Order Payments` sheet may have grouped headers where:
+
+* Row 1 contains category/group labels
+* Row 2 contains actual column headers
+
+Therefore:
+
+**DO NOT assume row 1 is the header.**
+
+Automatically detect the actual header row based on required columns.
+
+Important Order Payments columns include:
+
+* Sub Order No
+* Order Date
+* Dispatch Date
+* Product Name
+* Supplier SKU
+* Catalog ID
+* Order source
+* Live Order Status
+* Product GST %
+* Listing Price (Incl. taxes)
+* Quantity
+* Transaction ID
+* Payment Date
+* Final Settlement Amount
+* Price Type
+* Total Sale Amount (Incl. Shipping & GST)
+* Total Sale Return Amount (Incl. Shipping & GST)
+* Fixed Fee (Incl. GST)
+* Warehousing fee (inc Gst)
+* Return premium (incl GST)
+* Return premium (incl GST) of Return
+* Meesho Commission Percentage
+* Meesho Commission (Incl. GST)
+* Meesho gold platform fee (Incl. GST)
+* Meesho mall platform fee (Incl. GST)
+* Return Shipping Charge (Incl. GST)
+* GST Compensation (PRP Shipping)
+* Shipping Charge (Incl. GST)
+* Other Support Service Charges (Excl. GST)
+* Waivers (Excl. GST)
+* Net Other Support Service Charges (Excl. GST)
+* GST on Net Other Support Service Charges
+* TCS
+* TDS Rate %
+* TDS
+* Compensation
+* Claims
+* Recovery
+* Compensation Reason
+* Claims Reason
+* Recovery Reason
+
+Also import:
+
+### Ads Cost
+
+* Deduction Duration
+* Deduction Date
+* Campaign ID
+* Ad Cost
+* Credits / Waivers / Discounts
+* Ad Cost incl. Credits/Waivers/Discounts
+* GST
+* Total Ads Cost
+
+### Referral Payments
+
+* Reward Id
+* Payment Date
+* Store Name
+* Reason
+* Net Referral Amount
+* Taxes (GST/TDS)
+
+### Compensation and Recovery
+
+* Date
+* Program Name
+* Reason
+* Amount (inc GST) INR
+
+---
+
+# 4. SKU PURCHASE COST SYSTEM
+
+Create a dedicated **SKU Costs** page.
+
+I will enter:
+
+* Supplier SKU
+* Product Name
+* Purchase Price Including GST
+* GST Rate
+* Optional notes
+
+Example:
+
+SKU: ABC123
+Purchase Price Including GST: ₹35.40
+GST: 18%
+
+The application automatically calculates:
+
+Purchase Price Excluding GST:
+
+`35.40 / 1.18 = ₹30.00`
+
+Input GST:
+
+`35.40 - 30.00 = ₹5.40`
+
+Store SKU costs in browser persistence using IndexedDB or localStorage.
+
+When an Excel file is imported, automatically match:
+
+`Supplier SKU → SKU Cost`
+
+If a SKU has no purchase cost:
+
+**DO NOT assume the cost is ₹0.**
+
+Mark it as:
+
+**COST MISSING**
+
+and do not show a fake profit.
+
+---
+
+# 5. QUANTITY
+
+Respect the quantity in the Meesho report.
+
+If:
+
+Quantity = 2
+Purchase price per unit including GST = ₹35.40
+
+Then:
+
+Total Purchase Cost =
+
+`2 × ₹35.40 = ₹70.80`
+
+Do not accidentally use the single-unit cost for multi-quantity orders.
+
+---
+
+# 6. ORDER STATUS LOGIC
+
+Handle these separately:
+
+* Delivered
+* Shipped
+* RTO
+* Return
+* Cancelled
+* Pending
+* Other statuses
+
+Do not treat every row as a normal profitable sale.
+
+## DELIVERED
+
+For delivered orders:
+
+`Cash Profit Before Ads = Final Settlement Amount - Total Purchase Cost Including GST`
+
+Then subtract allocated advertising cost.
+
+## RTO
+
+IMPORTANT:
+
+**RTO SHIPPING COST IS ALWAYS ₹0 FOR MY BUSINESS.**
+
+Do NOT estimate RTO shipping charges.
+
+Do NOT add a hypothetical RTO shipping cost.
+
+For RTO:
+
+* RTO shipping cost = ₹0
+* Settlement should use the actual Meesho settlement value
+* If product cost is incurred, allow a setting called:
+
+**"Charge Product Cost on RTO"**
+
+If enabled:
+
+`RTO Profit = Settlement - Purchase Cost Including GST`
+
+If disabled:
+
+`RTO Profit = Settlement`
+
+Default this setting to ENABLED, but make it configurable.
+
+Clearly show the RTO calculation.
+
+## CANCELLED
+
+Cancelled orders must NOT automatically be considered profitable.
+
+If a cancelled order has a positive settlement amount, flag:
+
+**"Cancelled order with settlement — review required"**
+
+Do not automatically classify it as normal profit.
+
+## NEGATIVE SETTLEMENT
+
+If settlement is negative, preserve the negative value.
+
+Example:
+
+Settlement = -₹157
+
+Purchase cost = ₹23.60
+
+Profit:
+
+`-157 - 23.60 = -180.60`
+
+Do not create a positive margin from a negative settlement.
+
+Display:
+
+**Loss**
+
+and show the exact negative amount.
+
+---
+
+# 7. MARGIN CALCULATION
+
+Do not calculate misleading margins.
+
+For normal delivered orders:
+
+`Margin % = Net Cash Profit / Settlement × 100`
+
+Only display margin when the denominator makes sense.
+
+If:
+
+Settlement <= 0
+
+display:
+
+`—`
+
+instead of producing strange percentages such as 115%.
+
+For missing cost:
+
+Margin = `—`
+
+For cancelled orders requiring review:
+
+Margin = `—`
+
+---
+
+# 8. ADVERTISING COST
+
+Import the Ads Cost sheet.
+
+Show:
+
+* Total Ad Cost
+* GST on Ads
+* Total Ads Cost Including GST
+* Campaign-wise ad cost
+* Date-wise ad cost
+
+Allow ad allocation methods:
+
+1. No allocation
+2. Equal allocation per order
+3. Allocation by order value
+4. Allocation by quantity
+
+Clearly label allocated ad costs as:
+
+**Estimated Ad Allocation**
+
+unless the source report provides an exact order-level advertising charge.
+
+Do not double-count GST on advertising.
+
+---
+
+# 9. PROFIT CALCULATION
+
+For every order calculate:
+
+### Settlement
+
+Use:
+
+`Final Settlement Amount`
+
+from Meesho.
+
+### Purchase Cost
+
+`Purchase Price Including GST × Quantity`
+
+### Cash Profit Before Ads
+
+`Settlement - Purchase Cost Including GST`
+
+### Allocated Ad Cost
+
+Based on selected allocation method.
+
+### Net Cash Profit
+
+`Cash Profit Before Ads - Allocated Ad Cost`
+
+---
+
+# 10. GST ACCOUNTING CALCULATION
+
+Create a separate GST section.
+
+For each applicable transaction, show:
+
+### Sales
+
+* Sales / settlement-related source amount
+* Output GST
+* Taxable sales
+
+### Purchases
+
+* Purchase cost including GST
+* Input GST
+* Purchase cost excluding GST
+
+### GST
+
+`Net GST Payable = Output GST - Eligible Input GST`
+
+Do not assume that every GST amount in the Meesho report is output GST.
+
+Use the correct Meesho GST-related columns where available and clearly label any derived value as **Estimated**.
+
+Allow the user to configure:
+
+* GST registration: Yes / No
+* Default GST rate: 5%, 12%, 18%, etc.
+* Whether input GST/ITC should be considered
+
+Do not provide tax/legal advice. Clearly state that the GST accounting view is an estimate and should be verified with a CA/accountant.
+
+---
+
+# 11. DASHBOARD
+
+Create a professional dashboard with:
+
+### Main KPI Cards
+
+* Total Orders
+* Delivered Orders
+* RTO Orders
+* Cancelled Orders
+* Total Settlement
+* Total Purchase Cost
+* Total Ad Cost
+* Net Cash Profit
+* Profit Margin
+* Total Loss
+* Missing SKU Costs
+
+### GST Cards
+
+* Output GST
+* Input GST / ITC
+* Estimated Net GST Payable
+
+### Important Warning Cards
+
+* Missing SKU Costs
+* Negative Settlements
+* Cancelled Orders with Settlement
+* Orders requiring review
+
+---
+
+# 12. ORDERS PAGE
+
+Create a powerful searchable/filterable table.
+
+Columns:
+
+* Order Date
+* Sub Order No
+* Product
+* SKU
+* Quantity
+* Status
+* Settlement
+* Purchase Cost Incl. GST
+* Input GST
+* COGS
+* Cash Profit Before Ads
+* Ad Cost
+* Net Cash Profit
+* Margin %
+* Calculation Status
+
+Filters:
+
+* Date
+* Status
+* SKU
+* Product
+* Profit / Loss
+* Missing Cost
+* RTO
+* Cancelled
+* Negative Settlement
+
+Add sorting and pagination.
+
+---
+
+# 13. "WHY THIS PROFIT?" BREAKDOWN
+
+When I click an order, show a detailed calculation.
+
+Example:
+
+Settlement
+₹46.37
+
+Less Purchase Cost
+₹35.40
+
+Cash Profit Before Ads
+₹10.97
+
+Less Allocated Ad Cost
+₹X
+
+Net Cash Profit
+₹X
+
+Then separately show:
+
+Purchase Value Excl. GST
+₹30.00
+
+Input GST
+₹5.40
+
+GST section must be separate from cash profit.
+
+This should make it extremely easy for a non-finance user to understand where the profit came from.
+
+---
+
+# 14. SKU ANALYSIS
+
+Create SKU-level analytics.
+
+For every SKU show:
+
+* SKU
+* Product
+* Units Sold
+* Revenue / Settlement
+* Purchase Cost
+* Ad Cost
+* Net Profit
+* Profit per Unit
+* Margin %
+* RTO Count
+* Return Count
+* Cancellation Count
+* Missing Cost status
+
+Allow sorting by:
+
+* Highest profit
+* Lowest profit
+* Highest margin
+* Lowest margin
+* Highest sales
+* Highest RTO
+* Highest loss
+
+---
+
+# 15. BREAK-EVEN CALCULATOR
+
+Create a Break-Even page.
+
+Inputs:
+
+* Selling/List Price
+* Purchase Cost Including GST
+* Expected Meesho deductions
+* Ad Cost
+* GST rate
+* Desired profit
+* Quantity
+
+Calculate:
+
+* Minimum selling price
+* Expected profit
+* Profit margin
+* Break-even price
+
+Clearly label assumptions.
+
+---
+
+# 16. DATA VALIDATION
+
+Before calculating, validate the imported Excel.
+
+Show:
+
+* Number of rows
+* Number of valid orders
+* Missing SKU
+* Missing settlement
+* Invalid numbers
+* Duplicate Sub Order No
+* Unknown status
+* Negative settlement
+* Cancelled orders with settlement
+* Missing purchase cost
+
+Never silently convert invalid/missing values to zero.
+
+Use:
+
+`null`
+
+or a clearly marked missing value instead.
+
+---
+
+# 17. PREVENT DOUBLE COUNTING
+
+This is extremely important.
+
+`Final Settlement Amount` already represents Meesho's settlement after applicable deductions/adjustments.
+
+Therefore:
+
+**DO NOT subtract Meesho commission, shipping, fixed fees, return shipping, etc. again from Final Settlement Amount unless the calculation is explicitly being reconstructed from gross sales.**
+
+Provide an optional audit breakdown, but the main cash-profit calculation must not double-subtract these fees.
+
+---
+
+# 18. NEGATIVE / ZERO VALUES
+
+Handle all of these correctly:
+
+* Settlement = 0
+* Settlement < 0
+* Purchase cost = 0
+* Missing purchase cost
+* Ad cost = 0
+* Quantity > 1
+* Quantity = 0
+* GST = 0
+
+Do not generate:
+
+* NaN
+* Infinity
+* fake 100% margins
+* fake positive profit
+* negative percentage caused by an invalid denominator
+
+---
+
+# 19. REPORT EXPORT
+
+Allow export to Excel and CSV.
+
+Export sheets:
+
+1. Profit Report
+2. Order Details
+3. SKU Analysis
+4. GST Summary
+5. Ad Summary
+6. Missing Costs
+7. Validation Report
+
+The exported Profit Report should contain at minimum:
+
+* Order Date
+* Sub Order No
+* Product
+* SKU
+* Quantity
+* Status
+* Settlement
+* Purchase Cost Incl. GST
+* Purchase Cost Excl. GST
+* Input GST
+* Cash Profit Before Ads
+* Ad Cost
+* Net Cash Profit
+* Margin %
+* Calculation Status
+
+---
+
+# 20. SETTINGS
+
+Create a Settings page with:
+
+### GST
+
+* GST Registered: Yes/No
+* Default GST Rate
+* Consider Input GST/ITC: Yes/No
+
+### RTO
+
+* RTO Shipping Cost: DEFAULT ₹0
+* Charge Product Cost on RTO: DEFAULT Yes
+
+### Ads
+
+* Ad Allocation Method
+
+### General
+
+* Currency: INR
+* Decimal places
+* Data persistence
+
+---
+
+# 21. UI / DESIGN
+
+Make the application look like a professional modern SaaS dashboard.
+
+Use:
+
+* Tailwind CSS
+* shadcn/ui
+* Lucide icons
+* Recharts
+
+Design requirements:
+
+* Clean white/light interface
+* Responsive desktop/tablet/mobile
+* Professional cards
+* Clear typography
+* Green for profit
+* Red for loss
+* Amber for warnings
+* Blue/neutral for information
+* Tooltips explaining financial terms
+* Sticky table headers
+* Search
+* Filters
+* Pagination
+* Empty states
+* Loading states
+* Error states
+
+Do not overcrowd the dashboard.
+
+---
+
+# 22. TECHNOLOGY
+
+Use:
+
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+* shadcn/ui
+* Recharts
+* SheetJS / xlsx
+* Lucide React
+* date-fns if needed
+
+Use clean component architecture.
+
+Suggested structure:
+
+`src/components`
+`src/pages`
+`src/lib`
+`src/utils`
+`src/types`
+`src/hooks`
+`src/data`
+
+Create reusable calculation functions rather than putting financial calculations directly inside UI components.
+
+---
+
+# 23. CENTRAL CALCULATION ENGINE
+
+Create a single calculation engine.
+
+For example:
+
+`calculateOrderProfit(order, skuCost, settings)`
+
+It should return:
+
+```text
+settlement
+quantity
+purchaseCostInclGST
+purchaseCostExclGST
+inputGST
+cashProfitBeforeAds
+allocatedAdCost
+netCashProfit
+margin
+status
+calculationStatus
+warnings
+```
+
+Every page must use this same calculation engine.
+
+Do not duplicate calculation formulas across Dashboard, Orders, SKU Analysis, or exports.
+
+---
+
+# 24. CALCULATION STATUS
+
+Each order should have one of:
+
+* PROFIT
+* LOSS
+* RTO
+* CANCELLED
+* COST MISSING
+* REVIEW REQUIRED
+* NO SETTLEMENT
+* INVALID DATA
+
+Do not classify an order as PROFIT merely because its settlement is positive.
+
+---
+
+# 25. ACCEPTANCE TESTS
+
+Before considering the application complete, test these exact scenarios.
+
+### TEST 1 — Normal Delivered Order
+
+Settlement = ₹46.37
+Purchase cost incl GST = ₹35.40
+Quantity = 1
+Ad cost = ₹0
+
+Expected:
+
+Cash Profit = ₹10.97
+
+---
+
+### TEST 2 — GST Purchase
+
+Purchase cost incl GST = ₹35.40
+GST = 18%
+
+Expected:
+
+Purchase excluding GST = ₹30.00
+Input GST = ₹5.40
+Cash purchase cost = ₹35.40
+
+Do NOT calculate cash profit using ₹30 purchase cost.
+
+---
+
+### TEST 3 — RTO
+
+Settlement = ₹0
+Purchase cost = ₹35.40
+RTO shipping = ₹0
+
+If "Charge Product Cost on RTO" = ON:
+
+Profit = `-₹35.40`
+
+If OFF:
+
+Profit = `₹0`
+
+No RTO shipping charge must be added.
+
+---
+
+### TEST 4 — Cancelled Order
+
+Status = Cancelled
+Settlement = ₹52.11
+
+Do NOT automatically show:
+
+Profit = ₹52.11
+
+Instead:
+
+`Review Required`
+
+and flag:
+
+`Cancelled order has settlement amount`
+
+---
+
+### TEST 5 — Negative Settlement
+
+Settlement = -₹157
+Purchase = ₹23.60
+
+Expected:
+
+Profit = `-₹180.60`
+
+Margin = `—`
+
+Status = LOSS
+
+---
+
+### TEST 6 — Missing SKU Cost
+
+Settlement = ₹100
+Purchase cost = missing
+
+Expected:
+
+Profit = `—`
+
+Status = `COST MISSING`
+
+Do NOT use ₹0 as purchase cost.
+
+---
+
+### TEST 7 — Quantity 2
+
+Settlement = ₹100
+Purchase price per unit = ₹35.40
+Quantity = 2
+
+Expected:
+
+Purchase cost = ₹70.80
+
+Cash Profit = ₹29.20
+
+---
+
+### TEST 8 — No Double Counting
+
+If Final Settlement Amount already includes Meesho commission and shipping deductions:
+
+Do NOT subtract those deductions again.
+
+---
+
+# 26. IMPORTANT FINANCIAL PRINCIPLE
+
+The application must clearly distinguish:
+
+### CASH PROFIT
+
+"What cash did I actually make after paying the supplier?"
+
+`Settlement - Purchase Cost Incl GST - Ad Cost`
+
+and:
+
+### GST / ACCOUNTING PROFIT
+
+"What is the business profit after separating GST and eligible input tax credit?"
+
+These are different views.
+
+Never subtract input GST from cash profit a second time.
+
+---
+
+# 27. USER EXPERIENCE
+
+The first-time workflow should be:
+
+1. Upload Meesho Excel
+2. Application detects sheets and columns
+3. Import orders
+4. Show missing SKU costs
+5. Enter/upload SKU purchase prices including GST
+6. Match SKU costs automatically
+7. Select GST settings
+8. Select ad allocation method
+9. Calculate profit
+10. Show Dashboard
+11. Allow order-level calculation inspection
+12. Export final report
+
+Add an option to upload a separate SKU cost Excel file with:
+
+* Supplier SKU
+* Purchase Price Incl GST
+* GST Rate
+
+---
+
+# 28. DO NOT MAKE THESE MISTAKES
+
+NEVER:
+
+* Treat missing purchase cost as ₹0
+* Treat cancelled settlement as automatic profit
+* Add RTO shipping cost
+* Divide Final Settlement by 1.18 blindly
+* Subtract input GST from cash profit again
+* Double-subtract Meesho fees
+* Turn negative settlements into positive margins
+* Show misleading margins
+* Ignore quantity
+* Hide calculation assumptions
+* Silently replace invalid data with zero
+
+---
+
+# 29. FINAL REQUIREMENT
+
+Build the application fully, not as a mockup.
+
+All buttons, calculations, Excel imports, filters, charts, settings, SKU matching, persistence, GST calculations, ad allocation, and exports must work.
+
+Use realistic sample data during development.
+
+After implementation, run the acceptance tests above and fix any calculation discrepancies.
+
+The most important priority is:
+
+**CORRECT FINANCIAL CALCULATIONS > UI DESIGN**
+
+The calculator must be understandable to someone who is not a finance expert.
+
+Every important number should have a tooltip or explanation showing exactly how it was calculated.
