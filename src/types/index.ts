@@ -15,6 +15,10 @@ export type AdAllocationMethod =
 
 export type ProfitView = "cash" | "accounting" | "net";
 
+export type ReturnProductCondition = "usable" | "damaged" | "manual";
+
+export type PerOrderReturnCondition = "usable" | "damaged";
+
 export type CalculationStatus =
   | "PROFIT"
   | "LOSS"
@@ -37,12 +41,17 @@ export interface RTOSettings {
   chargeProductCostOnRTO: boolean;
 }
 
+export interface ReturnSettings {
+  returnProductCondition: ReturnProductCondition;
+}
+
 export interface UserSettings {
   currency: string;
   adAllocationMethod: AdAllocationMethod;
   defaultProfitView: ProfitView;
   decimalPlaces: number;
   rto: RTOSettings;
+  returnOrder: ReturnSettings;
 }
 
 export interface SKUCost {
@@ -109,6 +118,13 @@ export interface OrderProfitResult {
   status: OrderStatus;
   calculationStatus: CalculationStatus;
   warnings: string[];
+  returnBreakdown?: {
+    effectiveCondition: PerOrderReturnCondition;
+    isManualOverride: boolean;
+    returnShippingCharge: number;
+    purchaseCostLoss: number;
+    totalReturnLoss: number;
+  };
 }
 
 export interface OrderWithCalculations extends Order {
@@ -132,6 +148,13 @@ export interface OrderWithCalculations extends Order {
   netGSTPayable: number | null;
   gstAdjustedProfit: number | null;
   cashProfitBeforeAds: number | null;
+  returnBreakdown?: {
+    effectiveCondition: PerOrderReturnCondition;
+    isManualOverride: boolean;
+    returnShippingCharge: number;
+    purchaseCostLoss: number;
+    totalReturnLoss: number;
+  };
 }
 
 export interface AdsCostEntry {
