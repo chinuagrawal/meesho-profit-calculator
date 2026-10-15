@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { Calculator, Tag, IndianRupee, TrendingUp, AlertCircle } from "lucide-react";
+import {
+  Calculator,
+  Tag,
+  IndianRupee,
+  TrendingUp,
+  AlertCircle,
+} from "lucide-react";
 import {
   Card,
   CardContent,
@@ -18,14 +24,14 @@ import { calculatePurchaseGSTComponents } from "@/calculations";
 import { SKUAggregate } from "@/types";
 
 export default function BreakEvenPage() {
-  const { enrichedOrders, gstSettings, ads } = useApp();
+  const { filteredEnrichedOrders, gstSettings, dateFilterType } = useApp();
   const skuAggs: SKUAggregate[] = useMemo(
-    () => aggregateBySKU(enrichedOrders),
-    [enrichedOrders]
+    () => aggregateBySKU(filteredEnrichedOrders),
+    [filteredEnrichedOrders],
   );
 
   const [selectedSKU, setSelectedSKU] = useState<string>(
-    skuAggs[0]?.supplierSKU ?? ""
+    skuAggs[0]?.supplierSKU ?? "",
   );
   const [desiredProfitPerUnit, setDesiredProfitPerUnit] = useState<string>("");
 
@@ -62,11 +68,15 @@ export default function BreakEvenPage() {
       purchasePerUnit,
       profitPerUnit,
       adPerUnit,
-      marginPerUnit: settlementPerUnit > 0 ? (profitPerUnit ?? 0) / settlementPerUnit * 100 : null,
+      marginPerUnit:
+        settlementPerUnit > 0
+          ? ((profitPerUnit ?? 0) / settlementPerUnit) * 100
+          : null,
       gstRate: rate,
-      roiPerUnit: purchasePerUnit && purchasePerUnit > 0 && profitPerUnit !== null
-        ? (profitPerUnit / purchasePerUnit) * 100
-        : null,
+      roiPerUnit:
+        purchasePerUnit && purchasePerUnit > 0 && profitPerUnit !== null
+          ? (profitPerUnit / purchasePerUnit) * 100
+          : null,
     };
   }, [current, gstSettings]);
 
@@ -78,8 +88,7 @@ export default function BreakEvenPage() {
   const requiredCalc = useMemo(() => {
     if (!currentStats || !desiredNum) return null;
     const rate = currentStats.gstRate;
-    const purchase =
-      currentStats.purchasePerUnit; // incl GST
+    const purchase = currentStats.purchasePerUnit; // incl GST
     const ad = currentStats.adPerUnit;
     if (purchase === null) return null;
 
@@ -92,12 +101,13 @@ export default function BreakEvenPage() {
     const grossSettlement = requiredSettlementPerUnit * currentStats.units;
 
     // Historical fee ratio: (Sale - Settlement) / Sale per unit
-    const avgSalePerUnit = (current?.sales ?? 0) / Math.max(currentStats.units, 1);
+    const avgSalePerUnit =
+      (current?.sales ?? 0) / Math.max(currentStats.units, 1);
     const feeRatio =
       avgSalePerUnit > 0
         ? Math.max(
             0,
-            (avgSalePerUnit - currentStats.settlementPerUnit) / avgSalePerUnit
+            (avgSalePerUnit - currentStats.settlementPerUnit) / avgSalePerUnit,
           )
         : 0.15;
     const estimatedSellingPrice =
@@ -124,6 +134,13 @@ export default function BreakEvenPage() {
           Set a desired profit per unit to estimate the required settlement and
           listing selling price for each SKU, based on your historical Meesho
           fee ratio.
+          {dateFilterType !== "all" && (
+            <span className="block mt-1 text-emerald-700 font-medium">
+              Scope:{" "}
+              {skuAggs.reduce((n, s) => n + s.units, 0).toLocaleString("en-IN")}{" "}
+              units across {skuAggs.length} SKUs (filtered)
+            </span>
+          )}
         </p>
       </div>
 
@@ -146,8 +163,8 @@ export default function BreakEvenPage() {
                 <option value="">— Choose a SKU —</option>
                 {skuAggs.map((s) => (
                   <option key={s.supplierSKU} value={s.supplierSKU}>
-                    {s.supplierSKU} — {s.productName.slice(0, 50)} (
-                    {s.units} units)
+                    {s.supplierSKU} — {s.productName.slice(0, 50)} ({s.units}{" "}
+                    units)
                   </option>
                 ))}
               </Select>
@@ -159,7 +176,9 @@ export default function BreakEvenPage() {
             </div>
 
             <div>
-              <Label className="mb-1.5 block">Desired Profit per Unit (₹)</Label>
+              <Label className="mb-1.5 block">
+                Desired Profit per Unit (₹)
+              </Label>
               <div className="flex items-stretch gap-2">
                 <div className="flex items-center px-3 rounded-md bg-slate-100 border border-slate-200">
                   <IndianRupee className="w-4 h-4 text-slate-600" />
@@ -188,12 +207,15 @@ export default function BreakEvenPage() {
             </div>
 
             {!current?.hasMissingCost === false && (
-              <Alert variant="warning" className="text-xs flex items-start gap-2">
+              <Alert
+                variant="warning"
+                className="text-xs flex items-start gap-2"
+              >
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <div>
-                  This SKU is missing a purchase cost. Calculations below
-                  assume GST rate {gstSettings.purchaseGSTRate}% — visit SKU
-                  Costs page to set an exact cost.
+                  This SKU is missing a purchase cost. Calculations below assume
+                  GST rate {gstSettings.purchaseGSTRate}% — visit SKU Costs page
+                  to set an exact cost.
                 </div>
               </Alert>
             )}
@@ -218,7 +240,10 @@ export default function BreakEvenPage() {
                     </span>
                   }
                 />
-                <Row label="Units Sold" value={currentStats.units.toLocaleString("en-IN")} />
+                <Row
+                  label="Units Sold"
+                  value={currentStats.units.toLocaleString("en-IN")}
+                />
                 <Row
                   label="Purchase / Unit (Incl GST)"
                   value={
@@ -226,7 +251,9 @@ export default function BreakEvenPage() {
                       ? formatINR(currentStats.purchasePerUnit)
                       : "—"
                   }
-                  highlight={currentStats.purchasePerUnit === null ? "warn" : undefined}
+                  highlight={
+                    currentStats.purchasePerUnit === null ? "warn" : undefined
+                  }
                 />
                 <Row
                   label="GST Rate (Used)"
@@ -239,7 +266,11 @@ export default function BreakEvenPage() {
                 />
                 <Row
                   label="Avg Ad Allocation / Unit"
-                  value={currentStats.adPerUnit ? formatINR(currentStats.adPerUnit) : "—"}
+                  value={
+                    currentStats.adPerUnit
+                      ? formatINR(currentStats.adPerUnit)
+                      : "—"
+                  }
                 />
                 <div className="pt-2 border-t border-slate-100">
                   <Row
@@ -253,8 +284,8 @@ export default function BreakEvenPage() {
                       currentStats.profitPerUnit === null
                         ? "warn"
                         : currentStats.profitPerUnit >= 0
-                        ? "good"
-                        : "bad"
+                          ? "good"
+                          : "bad"
                     }
                     valueSize="lg"
                   />
@@ -337,7 +368,7 @@ export default function BreakEvenPage() {
                     <strong className="text-slate-900">
                       {formatINR(
                         requiredCalc.estimatedSellingPrice *
-                          (currentStats?.units ?? 0)
+                          (currentStats?.units ?? 0),
                       )}
                     </strong>
                   </li>
@@ -375,16 +406,18 @@ function Row({
     highlight === "good"
       ? "text-emerald-700"
       : highlight === "bad"
-      ? "text-red-700"
-      : highlight === "warn"
-      ? "text-amber-700"
-      : highlight === "info"
-      ? "text-blue-700"
-      : "text-slate-900";
+        ? "text-red-700"
+        : highlight === "warn"
+          ? "text-amber-700"
+          : highlight === "info"
+            ? "text-blue-700"
+            : "text-slate-900";
   return (
     <div className="flex justify-between items-center py-1.5 border-b border-slate-100 last:border-0">
       <span className="text-slate-600">{label}</span>
-      <span className={`tabular-nums font-semibold ${cls} ${valueSize === "lg" ? "text-lg" : ""}`}>
+      <span
+        className={`tabular-nums font-semibold ${cls} ${valueSize === "lg" ? "text-lg" : ""}`}
+      >
         {value}
       </span>
     </div>
@@ -406,8 +439,8 @@ function ResultCard({
     tone === "good"
       ? "from-emerald-500 to-teal-600 border-emerald-200 bg-emerald-50"
       : tone === "warn"
-      ? "from-amber-500 to-orange-600 border-amber-200 bg-amber-50"
-      : "from-blue-500 to-indigo-600 border-blue-200 bg-blue-50";
+        ? "from-amber-500 to-orange-600 border-amber-200 bg-amber-50"
+        : "from-blue-500 to-indigo-600 border-blue-200 bg-blue-50";
   return (
     <div className={`rounded-xl p-5 border ${toneCls}`}>
       <div className="flex items-start justify-between mb-3">

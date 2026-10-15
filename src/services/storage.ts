@@ -1,5 +1,14 @@
 import { openDB, DBSchema, IDBPDatabase } from "idb";
-import { Order, AdsCostEntry, ReferralPayment, CompensationEntry, SKUCost, GSTSettings, UserSettings, AppData } from "@/types";
+import {
+  Order,
+  AdsCostEntry,
+  ReferralPayment,
+  CompensationEntry,
+  SKUCost,
+  GSTSettings,
+  UserSettings,
+  AppData,
+} from "@/types";
 
 interface MeeshoDB extends DBSchema {
   orders: {
@@ -32,7 +41,9 @@ function getDB() {
       upgrade(db) {
         if (!db.objectStoreNames.contains("orders")) {
           const ordersStore = db.createObjectStore("orders", { keyPath: "id" });
-          ordersStore.createIndex("by-subOrderNo", "subOrderNo", { unique: false });
+          ordersStore.createIndex("by-subOrderNo", "subOrderNo", {
+            unique: false,
+          });
           ordersStore.createIndex("by-sku", "supplierSKU", { unique: false });
         }
         if (!db.objectStoreNames.contains("ads")) {
@@ -70,7 +81,12 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
     rtoShippingCost: 0,
     chargeProductCostOnRTO: true,
   },
+  returnOrder: {
+    returnProductCondition: "usable",
+  },
 };
+
+const LS_RETURN_OVERRIDES = "mpc_return_overrides";
 
 export const storage = {
   async getAllOrders(): Promise<Order[]> {
@@ -124,7 +140,10 @@ export const storage = {
     return db.getAll("referrals");
   },
 
-  async saveReferrals(entries: ReferralPayment[], overwrite = false): Promise<number> {
+  async saveReferrals(
+    entries: ReferralPayment[],
+    overwrite = false,
+  ): Promise<number> {
     const db = await getDB();
     const tx = db.transaction("referrals", "readwrite");
     if (overwrite) await tx.store.clear();
@@ -147,7 +166,10 @@ export const storage = {
     return db.getAll("compensations");
   },
 
-  async saveCompensations(entries: CompensationEntry[], overwrite = false): Promise<number> {
+  async saveCompensations(
+    entries: CompensationEntry[],
+    overwrite = false,
+  ): Promise<number> {
     const db = await getDB();
     const tx = db.transaction("compensations", "readwrite");
     if (overwrite) await tx.store.clear();
@@ -207,6 +229,33 @@ export const storage = {
     localStorage.setItem(LS_USER_SETTINGS, JSON.stringify(settings));
   },
 
+  getReturnOverrides(): Record<string, "usable" | "damaged"> {
+    try {
+      const raw = localStorage.getItem(LS_RETURN_OVERRIDES);
+      if (!raw) return {};
+      return JSON.parse(raw) as Record<string, "usable" | "damaged">;
+    } catch {
+      return {};
+    }
+  },
+
+  setReturnOverride(
+    subOrderNo: string,
+    condition: "usable" | "damaged" | null,
+  ): void {
+    const map = this.getReturnOverrides();
+    if (condition === null) {
+      delete map[subOrderNo];
+    } else {
+      map[subOrderNo] = condition;
+    }
+    localStorage.setItem(LS_RETURN_OVERRIDES, JSON.stringify(map));
+  },
+
+  clearReturnOverrides(): void {
+    localStorage.removeItem(LS_RETURN_OVERRIDES);
+  },
+
   async exportAllData(): Promise<AppData> {
     const [orders, ads, referrals, compensations] = await Promise.all([
       this.getAllOrders(),
@@ -222,6 +271,7 @@ export const storage = {
       skuCosts: this.getSKUCosts(),
       gstSettings: this.getGSTSettings(),
       userSettings: this.getUserSettings(),
+      returnOverrides: this.getReturnOverrides(),
     };
   },
 
@@ -235,6 +285,9 @@ export const storage = {
     if (data.skuCosts) this.saveSKUCosts(data.skuCosts);
     if (data.gstSettings) this.saveGSTSettings(data.gstSettings);
     if (data.userSettings) this.saveUserSettings(data.userSettings);
+    if (data.returnOverrides) {
+      localStorage.setItem(LS_RETURN_OVERRIDES, JSON.stringify(data.returnOverrides));
+    }
   },
 
   async clearAllData(): Promise<void> {
@@ -247,5 +300,6 @@ export const storage = {
     localStorage.removeItem(LS_SKU_COSTS);
     localStorage.removeItem(LS_GST_SETTINGS);
     localStorage.removeItem(LS_USER_SETTINGS);
+    localStorage.removeItem(LS_RETURN_OVERRIDES);
   },
 };

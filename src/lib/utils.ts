@@ -5,6 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function normalizeSKU(sku: string): string {
+  return sku.trim().toLowerCase();
+}
+
 function formatIndianGrouping(num: number, decimals: number): string {
   const negative = num < 0;
   const abs = Math.abs(num);

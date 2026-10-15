@@ -1,10 +1,5 @@
 import { useMemo } from "react";
-import {
-  Megaphone,
-  TrendingUp,
-  Calendar,
-  Tag,
-} from "lucide-react";
+import { Megaphone, TrendingUp, Calendar, Tag } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -48,41 +43,35 @@ const CAMP_COLORS = [
 ];
 
 export default function AdvertisingPage() {
-  const { ads, userSettings, setAdAllocationMethod } = useApp();
+  const {
+    ads,
+    filteredAds,
+    userSettings,
+    setAdAllocationMethod,
+    dateFilterType,
+  } = useApp();
 
   const totals = useMemo(() => {
-    const totalAdCost = ads.reduce(
-      (s, a) => s + (a.adCost ?? 0),
-      0
-    );
-    const totalCredits = ads.reduce(
-      (s, a) => s + (a.credits ?? 0),
-      0
-    );
-    const totalWaivers = ads.reduce(
-      (s, a) => s + (a.waivers ?? 0),
-      0
-    );
-    const totalDiscounts = ads.reduce(
+    const totalAdCost = filteredAds.reduce((s, a) => s + (a.adCost ?? 0), 0);
+    const totalCredits = filteredAds.reduce((s, a) => s + (a.credits ?? 0), 0);
+    const totalWaivers = filteredAds.reduce((s, a) => s + (a.waivers ?? 0), 0);
+    const totalDiscounts = filteredAds.reduce(
       (s, a) => s + (a.discounts ?? 0),
-      0
+      0,
     );
-    const totalGST = ads.reduce(
-      (s, a) => s + (a.gst ?? 0),
-      0
-    );
-    const totalNet = ads.reduce(
+    const totalGST = filteredAds.reduce((s, a) => s + (a.gst ?? 0), 0);
+    const totalNet = filteredAds.reduce(
       (s, a) => s + (a.totalAdsCost ?? a.adCost ?? 0),
-      0
+      0,
     );
     const uniqueCampaigns = new Set(
-      ads.map((a) => a.campaignID).filter(Boolean)
+      filteredAds.map((a) => a.campaignID).filter(Boolean),
     ).size;
-    const dates = ads
+    const dates = filteredAds
       .map((a) => a.deductionDate)
       .filter((d): d is Date => d instanceof Date && !isNaN(d.getTime()));
     const days = new Set(
-      dates.map((d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`)
+      dates.map((d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`),
     ).size;
     const avgDaily = days > 0 ? totalNet / days : 0;
     return {
@@ -96,11 +85,11 @@ export default function AdvertisingPage() {
       days,
       avgDaily,
     };
-  }, [ads]);
+  }, [filteredAds]);
 
   const byDate = useMemo(() => {
     const m = new Map<string, number>();
-    for (const ad of ads) {
+    for (const ad of filteredAds) {
       if (!ad.deductionDate) continue;
       const key = formatDate(ad.deductionDate);
       m.set(key, (m.get(key) ?? 0) + (ad.totalAdsCost ?? ad.adCost ?? 0));
@@ -108,11 +97,11 @@ export default function AdvertisingPage() {
     return Array.from(m.entries())
       .map(([date, spend]) => ({ date, spend }))
       .slice(-30);
-  }, [ads]);
+  }, [filteredAds]);
 
   const byMonth = useMemo(() => {
     const m = new Map<string, { label: string; spend: number }>();
-    for (const ad of ads) {
+    for (const ad of filteredAds) {
       if (!ad.deductionDate) continue;
       const mk = getMonthKey(ad.deductionDate);
       const label = formatMonthYear(ad.deductionDate);
@@ -123,11 +112,11 @@ export default function AdvertisingPage() {
       });
     }
     return Array.from(m.values());
-  }, [ads]);
+  }, [filteredAds]);
 
   const byCampaign = useMemo(() => {
     const m = new Map<string, number>();
-    for (const ad of ads) {
+    for (const ad of filteredAds) {
       const id = ad.campaignID || "(no campaign)";
       m.set(id, (m.get(id) ?? 0) + (ad.totalAdsCost ?? ad.adCost ?? 0));
     }
@@ -135,7 +124,7 @@ export default function AdvertisingPage() {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
-  }, [ads]);
+  }, [filteredAds]);
 
   const allocationOptions: {
     value: typeof userSettings.adAllocationMethod;
@@ -172,15 +161,34 @@ export default function AdvertisingPage() {
           Advertising
         </h1>
         <p className="text-slate-600 mt-1 text-sm">
-          Ads are read from the <Badge variant="info" className="mx-1">Ads Cost</Badge> sheet.
-          Choose how ad costs are allocated to orders for Net Profit calculation.
+          Ads are read from the{" "}
+          <Badge variant="info" className="mx-1">
+            Ads Cost
+          </Badge>{" "}
+          sheet. Choose how ad costs are allocated to orders for Net Profit
+          calculation.
         </p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPI title="Total Ad Spend (Net)" value={formatINR(totals.totalNet)} tone="warn" icon={Megaphone} />
-        <KPI title="Campaigns" value={totals.uniqueCampaigns.toString()} tone="info" icon={Tag} />
-        <KPI title="Days Active" value={totals.days.toString()} tone="default" icon={Calendar} />
+        <KPI
+          title="Total Ad Spend (Net)"
+          value={formatINR(totals.totalNet)}
+          tone="warn"
+          icon={Megaphone}
+        />
+        <KPI
+          title="Campaigns"
+          value={totals.uniqueCampaigns.toString()}
+          tone="info"
+          icon={Tag}
+        />
+        <KPI
+          title="Days Active"
+          value={totals.days.toString()}
+          tone="default"
+          icon={Calendar}
+        />
         <KPI
           title="Avg. Daily Spend"
           value={formatINR(totals.avgDaily)}
@@ -249,7 +257,12 @@ export default function AdvertisingPage() {
                       formatter={(v: number) => formatINR(v)}
                       contentStyle={{ fontSize: 12 }}
                     />
-                    <Bar dataKey="spend" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Ad Spend" />
+                    <Bar
+                      dataKey="spend"
+                      fill="#f59e0b"
+                      radius={[4, 4, 0, 0]}
+                      name="Ad Spend"
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -259,7 +272,9 @@ export default function AdvertisingPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Ad Spend by Campaign (Top 10)</CardTitle>
+            <CardTitle className="text-base">
+              Ad Spend by Campaign (Top 10)
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-72">
@@ -280,7 +295,10 @@ export default function AdvertisingPage() {
                       }
                     >
                       {byCampaign.map((_, i) => (
-                        <Cell key={i} fill={CAMP_COLORS[i % CAMP_COLORS.length]} />
+                        <Cell
+                          key={i}
+                          fill={CAMP_COLORS[i % CAMP_COLORS.length]}
+                        />
                       ))}
                     </Pie>
                     <Tooltip
@@ -298,33 +316,53 @@ export default function AdvertisingPage() {
 
       <Card className="overflow-hidden">
         <CardHeader className="border-b">
-          <CardTitle className="text-base">Ad Entries ({ads.length})</CardTitle>
+          <CardTitle className="text-base">
+            Ad Entries ({filteredAds.length}
+            {dateFilterType !== "all" && ` of ${ads.length}`})
+          </CardTitle>
         </CardHeader>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-700 border-b">
               <tr>
                 <th className="text-left font-semibold px-3 py-2.5">Date</th>
-                <th className="text-left font-semibold px-3 py-2.5">Duration</th>
-                <th className="text-left font-semibold px-3 py-2.5">Campaign</th>
-                <th className="text-right font-semibold px-3 py-2.5">Ad Cost</th>
-                <th className="text-right font-semibold px-3 py-2.5">Credits</th>
-                <th className="text-right font-semibold px-3 py-2.5">Waivers</th>
-                <th className="text-right font-semibold px-3 py-2.5">Discounts</th>
+                <th className="text-left font-semibold px-3 py-2.5">
+                  Duration
+                </th>
+                <th className="text-left font-semibold px-3 py-2.5">
+                  Campaign
+                </th>
+                <th className="text-right font-semibold px-3 py-2.5">
+                  Ad Cost
+                </th>
+                <th className="text-right font-semibold px-3 py-2.5">
+                  Credits
+                </th>
+                <th className="text-right font-semibold px-3 py-2.5">
+                  Waivers
+                </th>
+                <th className="text-right font-semibold px-3 py-2.5">
+                  Discounts
+                </th>
                 <th className="text-right font-semibold px-3 py-2.5">GST</th>
                 <th className="text-right font-semibold px-3 py-2.5">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {ads.length === 0 ? (
+              {filteredAds.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-500 text-sm">
+                  <td
+                    colSpan={9}
+                    className="py-12 text-center text-slate-500 text-sm"
+                  >
                     <Megaphone className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                    No ad data. Upload a Meesho report with an Ads Cost sheet.
+                    {ads.length === 0
+                      ? "No ad data. Upload a Meesho report with an Ads Cost sheet."
+                      : "No ad entries match current filters."}
                   </td>
                 </tr>
               ) : (
-                ads.slice(0, 500).map((a) => (
+                filteredAds.slice(0, 500).map((a) => (
                   <tr key={a.id} className="hover:bg-slate-50/70">
                     <td className="px-3 py-2 whitespace-nowrap">
                       {formatDate(a.deductionDate)}
@@ -333,7 +371,9 @@ export default function AdvertisingPage() {
                       {a.deductionDuration || "—"}
                     </td>
                     <td className="px-3 py-2 font-mono text-xs">
-                      {a.campaignID || <span className="text-slate-400">—</span>}
+                      {a.campaignID || (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {formatINR(a.adCost)}

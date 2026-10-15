@@ -26,18 +26,21 @@ import {
 } from "recharts";
 
 export default function ReferralPage() {
-  const { referrals } = useApp();
+  const { referrals, filteredReferrals, dateFilterType } = useApp();
 
   const totals = useMemo(() => {
-    const total = referrals.reduce((s, r) => s + (r.amount ?? 0), 0);
-    const count = referrals.length;
-    const withOrder = referrals.filter((r) => r.subOrderNo).length;
+    const total = filteredReferrals.reduce((s, r) => s + (r.amount ?? 0), 0);
+    const count = filteredReferrals.length;
+    const withOrder = filteredReferrals.filter((r) => r.subOrderNo).length;
     return { total, count, withOrder };
-  }, [referrals]);
+  }, [filteredReferrals]);
 
   const byMonth = useMemo(() => {
-    const m = new Map<string, { label: string; amount: number; count: number }>();
-    for (const r of referrals) {
+    const m = new Map<
+      string,
+      { label: string; amount: number; count: number }
+    >();
+    for (const r of filteredReferrals) {
       if (!r.date) continue;
       const mk = getMonthKey(r.date);
       const label = formatMonthYear(r.date);
@@ -49,13 +52,13 @@ export default function ReferralPage() {
       });
     }
     return Array.from(m.values()).sort((a, b) =>
-      a.label.localeCompare(b.label)
+      a.label.localeCompare(b.label),
     );
-  }, [referrals]);
+  }, [filteredReferrals]);
 
   const byReason = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of referrals) {
+    for (const r of filteredReferrals) {
       const key = r.reason || "(no reason)";
       m.set(key, (m.get(key) ?? 0) + (r.amount ?? 0));
     }
@@ -63,7 +66,7 @@ export default function ReferralPage() {
       .map(([name, amount]) => ({ name, amount }))
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 15);
-  }, [referrals]);
+  }, [filteredReferrals]);
 
   return (
     <div className="space-y-5">
@@ -73,9 +76,13 @@ export default function ReferralPage() {
           Referral Payments
         </h1>
         <p className="text-slate-600 mt-1 text-sm">
-          Income recorded on the <Badge variant="info" className="mx-1">Referral Payments</Badge> sheet.
-          Only attached to specific orders when Sub Order No is available; otherwise
-          treated as additional overall income in Dashboard totals.
+          Income recorded on the{" "}
+          <Badge variant="info" className="mx-1">
+            Referral Payments
+          </Badge>{" "}
+          sheet. Only attached to specific orders when Sub Order No is
+          available; otherwise treated as additional overall income in Dashboard
+          totals.
         </p>
       </div>
 
@@ -95,9 +102,7 @@ export default function ReferralPage() {
         <KPI
           title="Avg. Payment"
           value={
-            totals.count > 0
-              ? formatINR(totals.total / totals.count)
-              : "—"
+            totals.count > 0 ? formatINR(totals.total / totals.count) : "—"
           }
           tone="default"
           icon={IndianRupee}
@@ -113,7 +118,9 @@ export default function ReferralPage() {
       <div className="grid lg:grid-cols-2 gap-5">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Referral Income by Month</CardTitle>
+            <CardTitle className="text-base">
+              Referral Income by Month
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-72">
@@ -183,7 +190,8 @@ export default function ReferralPage() {
       <Card className="overflow-hidden">
         <CardHeader className="border-b">
           <CardTitle className="text-base">
-            Referral Entries ({referrals.length})
+            Referral Entries ({filteredReferrals.length}
+            {dateFilterType !== "all" && ` of ${referrals.length}`})
           </CardTitle>
         </CardHeader>
         <div className="overflow-x-auto scrollbar-thin">
@@ -199,19 +207,20 @@ export default function ReferralPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {referrals.length === 0 ? (
+              {filteredReferrals.length === 0 ? (
                 <tr>
                   <td
                     colSpan={4}
                     className="text-center py-12 text-slate-500 text-sm"
                   >
                     <FileText className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                    No referral payments. Upload a Meesho report with a Referral
-                    Payments sheet.
+                    {referrals.length === 0
+                      ? "No referral payments. Upload a Meesho report with a Referral Payments sheet."
+                      : "No entries match the current filters."}
                   </td>
                 </tr>
               ) : (
-                referrals.slice(0, 500).map((r) => (
+                filteredReferrals.slice(0, 500).map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50/70">
                     <td className="px-3 py-2 whitespace-nowrap">
                       {formatDate(r.date)}

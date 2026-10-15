@@ -17,6 +17,9 @@ import {
   OrderWithCalculations,
   AdAllocationMethod,
   ParsedWorkbook,
+  PerOrderReturnCondition,
+  DateFilterType,
+  DateRange,
 } from "@/types";
 import {
   storage,
@@ -35,6 +38,18 @@ interface AppContextValue {
   userSettings: UserSettings;
   loading: boolean;
   enrichedOrders: OrderWithCalculations[];
+  returnOverrides: Record<string, PerOrderReturnCondition>;
+  dateFilterType: DateFilterType;
+  customDateFrom: Date | null;
+  customDateTo: Date | null;
+  dateRange: DateRange;
+  filteredEnrichedOrders: OrderWithCalculations[];
+  filteredAds: AdsCostEntry[];
+  filteredReferrals: ReferralPayment[];
+  filteredCompensations: CompensationEntry[];
+  setDateFilterType: (type: DateFilterType) => void;
+  setCustomDateRange: (from: Date | null, to: Date | null) => void;
+  clearDateFilter: () => void;
   importParsedData: (
     parsed: ParsedWorkbook,
     overwrite: boolean,
@@ -57,6 +72,10 @@ interface AppContextValue {
   setGSTSettings: (settings: GSTSettings) => void;
   setUserSettings: (settings: UserSettings) => void;
   setAdAllocationMethod: (method: AdAllocationMethod) => void;
+  setReturnOverride: (
+    subOrderNo: string,
+    condition: PerOrderReturnCondition | null,
+  ) => void;
   clearAllData: () => Promise<void>;
   backupData: () => Promise<string>;
   restoreData: (json: string) => Promise<void>;
@@ -75,7 +94,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [userSettings, setUserSettingsState] = useState<UserSettings>(
     DEFAULT_USER_SETTINGS,
   );
+  const [returnOverrides, setReturnOverridesState] = useState<
+    Record<string, PerOrderReturnCondition>
+  >({});
   const [loading, setLoading] = useState(true);
+  const [dateFilterType, setDateFilterTypeState] =
+    useState<DateFilterType>("all");
+  const [customDateFrom, setCustomDateFrom] = useState<Date | null>(null);
+  const [customDateTo, setCustomDateTo] = useState<Date | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -96,6 +122,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setSKUCosts(storage.getSKUCosts());
       setGSTSettingsState(storage.getGSTSettings());
       setUserSettingsState(storage.getUserSettings());
+      setReturnOverridesState(storage.getReturnOverrides());
       setLoading(false);
     })();
   }, []);
@@ -271,6 +298,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const setReturnOverride = useCallback(
+    (subOrderNo: string, condition: PerOrderReturnCondition | null) => {
+      storage.setReturnOverride(subOrderNo, condition);
+      setReturnOverridesState((prev) => {
+        const next = { ...prev };
+        if (condition === null) {
+          delete next[subOrderNo];
+        } else {
+          next[subOrderNo] = condition;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
   const clearAllData = useCallback(async () => {
     await storage.clearAllData();
     setOrders([]);
@@ -280,6 +323,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSKUCosts([]);
     setGSTSettingsState({ ...DEFAULT_GST_SETTINGS });
     setUserSettingsState({ ...DEFAULT_USER_SETTINGS });
+    setReturnOverridesState({});
   }, []);
 
   const backupData = useCallback(async () => {
@@ -297,6 +341,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSKUCosts(data.skuCosts || []);
     setGSTSettingsState(data.gstSettings || { ...DEFAULT_GST_SETTINGS });
     setUserSettingsState(data.userSettings || { ...DEFAULT_USER_SETTINGS });
+    setReturnOverridesState(data.returnOverrides || {});
   }, []);
 
   const effectiveRTOSettings = useMemo(() => {
@@ -306,16 +351,154 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [userSettings.rto]);
 
+  const effectiveReturnSettings = useMemo(() => {
+    return {
+      ...DEFAULT_USER_SETTINGS.returnOrder,
+      ...(userSettings.returnOrder ?? {}),
+    };
+  }, [userSettings.returnOrder]);
+
   const enrichedOrders = useMemo(() => {
     return enrichAllOrders(
       orders,
       skuCosts,
       gstSettings,
       effectiveRTOSettings,
+      effectiveReturnSettings,
+      returnOverrides,
       ads,
       userSettings.adAllocationMethod,
     );
-  }, [orders, skuCosts, gstSettings, effectiveRTOSettings, ads, userSettings.adAllocationMethod]);
+  }, [
+    orders,
+    skuCosts,
+    gstSettings,
+    effectiveRTOSettings,
+    effectiveReturnSettings,
+    returnOverrides,
+    ads,
+    userSettings.adAllocationMethod,
+  ]);
+
+  const dateRange = useMemo((): DateRange => {
+    const now = new Date();
+    const startOfDay = (d: Date) => {
+      const x = new Date(d);
+      x.setHours(0, 0, 0, 0);
+      return x;
+    };
+    const endOfDay = (d: Date) => {
+      const x = new Date(d);
+      x.setHours(23, 59, 59, 999);
+      return x;
+    };
+
+    switch (dateFilterType) {
+      case "all":
+        return { start: null, end: null };
+      case "today": {
+        const d = startOfDay(now);
+        return { start: d, end: endOfDay(d) };
+      }
+      case "thisWeek": {
+        const d = new Date(now);
+        const day = d.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        const monday = new Date(d);
+        monday.setDate(d.getDate() + diff);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        return { start: startOfDay(monday), end: endOfDay(sunday) };
+      }
+      case "lastWeek": {
+        const d = new Date(now);
+        const day = d.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        const thisMonday = new Date(d);
+        thisMonday.setDate(d.getDate() + diff);
+        const lastMonday = new Date(thisMonday);
+        lastMonday.setDate(thisMonday.getDate() - 7);
+        const lastSunday = new Date(thisMonday);
+        lastSunday.setDate(thisMonday.getDate() - 1);
+        return { start: startOfDay(lastMonday), end: endOfDay(lastSunday) };
+      }
+      case "thisMonth": {
+        const first = new Date(now.getFullYear(), now.getMonth(), 1);
+        const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return { start: startOfDay(first), end: endOfDay(last) };
+      }
+      case "lastMonth": {
+        const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const last = new Date(now.getFullYear(), now.getMonth(), 0);
+        return { start: startOfDay(first), end: endOfDay(last) };
+      }
+      case "custom":
+        return {
+          start: customDateFrom ? startOfDay(customDateFrom) : null,
+          end: customDateTo ? endOfDay(customDateTo) : null,
+        };
+      default:
+        return { start: null, end: null };
+    }
+  }, [dateFilterType, customDateFrom, customDateTo]);
+
+  const isDateInRange = useCallback(
+    (d: Date | null | undefined): boolean => {
+      if (!d) return true;
+      const { start, end } = dateRange;
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
+    },
+    [dateRange],
+  );
+
+  const filteredEnrichedOrders = useMemo(() => {
+    if (dateRange.start === null && dateRange.end === null) {
+      return enrichedOrders;
+    }
+    return enrichedOrders.filter((o) => isDateInRange(o.orderDate));
+  }, [enrichedOrders, dateRange, isDateInRange]);
+
+  const filteredAds = useMemo(() => {
+    if (dateRange.start === null && dateRange.end === null) {
+      return ads;
+    }
+    return ads.filter((a) => isDateInRange(a.deductionDate));
+  }, [ads, dateRange, isDateInRange]);
+
+  const filteredReferrals = useMemo(() => {
+    if (dateRange.start === null && dateRange.end === null) {
+      return referrals;
+    }
+    return referrals.filter((r) => isDateInRange(r.date));
+  }, [referrals, dateRange, isDateInRange]);
+
+  const filteredCompensations = useMemo(() => {
+    if (dateRange.start === null && dateRange.end === null) {
+      return compensations;
+    }
+    return compensations.filter((c) => isDateInRange(c.date));
+  }, [compensations, dateRange, isDateInRange]);
+
+  const setDateFilterType = useCallback((type: DateFilterType) => {
+    setDateFilterTypeState(type);
+  }, []);
+
+  const setCustomDateRange = useCallback(
+    (from: Date | null, to: Date | null) => {
+      setCustomDateFrom(from);
+      setCustomDateTo(to);
+      setDateFilterTypeState("custom");
+    },
+    [],
+  );
+
+  const clearDateFilter = useCallback(() => {
+    setDateFilterTypeState("all");
+    setCustomDateFrom(null);
+    setCustomDateTo(null);
+  }, []);
 
   const value: AppContextValue = {
     orders,
@@ -327,6 +510,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     userSettings,
     loading,
     enrichedOrders,
+    returnOverrides,
+    dateFilterType,
+    customDateFrom,
+    customDateTo,
+    dateRange,
+    filteredEnrichedOrders,
+    filteredAds,
+    filteredReferrals,
+    filteredCompensations,
+    setDateFilterType,
+    setCustomDateRange,
+    clearDateFilter,
     importParsedData,
     setSKUCost,
     bulkSetSKUCosts,
@@ -334,6 +529,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setGSTSettings,
     setUserSettings,
     setAdAllocationMethod,
+    setReturnOverride,
     clearAllData,
     backupData,
     restoreData,

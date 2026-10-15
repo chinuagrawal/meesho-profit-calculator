@@ -16,7 +16,8 @@ import { OrderWithCalculations, SKUAggregate } from "@/types";
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"xlsx" | "csv">("xlsx");
-  const { enrichedOrders, skuCosts } = useApp();
+  const { enrichedOrders, filteredEnrichedOrders, skuCosts, dateFilterType } =
+    useApp();
 
   const escapeCSV = (val: any): string => {
     if (val === null || val === undefined || val === "—") return "";
@@ -78,7 +79,7 @@ export function Layout() {
   };
 
   const exportOrders = () => {
-    const rows = enrichedOrders.map((o) => ({
+    const rows = filteredEnrichedOrders.map((o) => ({
       "Order Date": formatDate(o.orderDate),
       "Sub Order No": o.subOrderNo,
       Product: o.productName,
@@ -105,7 +106,7 @@ export function Layout() {
   };
 
   const exportSKUAnalysis = () => {
-    const skuAggs = aggregateBySKU(enrichedOrders);
+    const skuAggs = aggregateBySKU(filteredEnrichedOrders);
     const rows = skuAggs.map((s: SKUAggregate) => ({
       SKU: s.supplierSKU,
       Product: s.productName,
@@ -125,7 +126,7 @@ export function Layout() {
   };
 
   const exportProfitReport = () => {
-    const rows = enrichedOrders.map((o: OrderWithCalculations) => ({
+    const rows = filteredEnrichedOrders.map((o: OrderWithCalculations) => ({
       "Order Date": formatDate(o.orderDate),
       "Sub Order No": o.subOrderNo,
       Product: o.productName,
@@ -156,12 +157,22 @@ export function Layout() {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex-1">
-            <h1 className="font-semibold text-slate-800">
+          <div className="flex-1 min-w-0">
+            <h1 className="font-semibold text-slate-800 truncate">
               Meesho Profit Calculator
             </h1>
-            <p className="text-xs text-slate-500">
-              {enrichedOrders.length} orders · {skuCosts.length} SKUs ·{" "}
+            <p className="text-xs text-slate-500 truncate">
+              {filteredEnrichedOrders.length}
+              {dateFilterType !== "all" && (
+                <>
+                  {" "}
+                  of{" "}
+                  <span className="text-slate-400">
+                    {enrichedOrders.length}
+                  </span>
+                </>
+              )}{" "}
+              orders · {skuCosts.length} SKUs ·{" "}
               {skuCosts.filter((s) => s.purchaseCostInclGST === null).length}{" "}
               missing costs
             </p>

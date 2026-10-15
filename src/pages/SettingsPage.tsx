@@ -12,6 +12,8 @@ import {
   Save,
   Calculator,
   RotateCcw,
+  Undo2,
+  Package,
 } from "lucide-react";
 import {
   Card,
@@ -33,6 +35,7 @@ import {
   ProfitView,
   GSTSettings,
   UserSettings,
+  ReturnProductCondition,
 } from "@/types";
 
 const GST_RATES = [0, 5, 12, 18, 28];
@@ -368,6 +371,96 @@ export default function SettingsPage() {
                 }
               />
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Undo2 className="w-5 h-5" /> Customer Return
+          </CardTitle>
+          <CardDescription>
+            Configure how customer returns affect profit calculation. Separate from RTO logic.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(
+            [
+              {
+                value: "usable",
+                label: "Product Returned & Usable (Default)",
+                desc: "Inventory recovered — do NOT deduct Purchase Cost. Only the actual Return Shipping Charge from Meesho report is treated as loss. Return Loss = Return Shipping Charge.",
+              },
+              {
+                value: "damaged",
+                label: "Product Damaged / Lost",
+                desc: "Product is a total loss. Deduct Purchase Cost Incl GST + actual Return Shipping Charge from Meesho report. Return Loss = Purchase Cost + Return Shipping Charge.",
+              },
+              {
+                value: "manual",
+                label: "Manual / Per-Order",
+                desc: "Decide individually for each returned order: 'Returned & Usable' or 'Damaged / Lost'. Override is set in the Orders page per returned order.",
+              },
+            ] as {
+              value: ReturnProductCondition;
+              label: string;
+              desc: string;
+            }[]
+          ).map((opt) => (
+            <label
+              key={opt.value}
+              className={
+                "p-3 rounded-lg border flex items-start gap-3 cursor-pointer transition-colors " +
+                (userSettings.returnOrder?.returnProductCondition === opt.value
+                  ? "border-emerald-500 bg-emerald-50/70 ring-2 ring-emerald-200"
+                  : "border-slate-200 hover:bg-slate-50")
+              }
+            >
+              <input
+                type="radio"
+                checked={
+                  userSettings.returnOrder?.returnProductCondition === opt.value
+                }
+                onChange={() =>
+                  updateUser({
+                    returnOrder: {
+                      returnProductCondition: opt.value,
+                    },
+                  })
+                }
+                className="mt-1"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                  {opt.label}
+                  {opt.value === "usable" && (
+                    <Badge variant="muted" className="text-[10px] h-5">
+                      Default
+                    </Badge>
+                  )}
+                  {opt.value === "damaged" && (
+                    <Package className="w-3.5 h-3.5 text-red-500" />
+                  )}
+                  {opt.value === "manual" && (
+                    <Save className="w-3.5 h-3.5 text-blue-500" />
+                  )}
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                  {opt.desc}
+                </div>
+              </div>
+            </label>
+          ))}
+          <div className="text-xs text-slate-500 pt-1 px-1">
+            <Badge variant="warning" className="mr-2">
+              Important
+            </Badge>
+            We use the <strong>actual Return Shipping Charge (Incl. GST)</strong>{" "}
+            from your Meesho Excel report. We do NOT estimate or invent return
+            shipping charges. If the report shows ₹0, the shipping loss is ₹0.
+            Purchase Cost is only counted as loss when marked{" "}
+            <strong>Damaged / Lost</strong>.
           </div>
         </CardContent>
       </Card>

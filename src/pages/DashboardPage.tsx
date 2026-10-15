@@ -53,6 +53,7 @@ import {
   Area,
 } from "recharts";
 import { SKUAggregate, MonthlyAggregate } from "@/types";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
 
 function Kpi({
   title,
@@ -178,44 +179,46 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const {
     enrichedOrders,
-    ads,
-    referrals,
-    compensations,
+    filteredEnrichedOrders,
+    filteredAds,
+    filteredReferrals,
+    filteredCompensations,
     skuCosts,
     userSettings,
+    dateFilterType,
   } = useApp();
 
   const totals = useMemo(() => {
-    const nonCancelled = enrichedOrders.filter(
+    const nonCancelled = filteredEnrichedOrders.filter(
       (o) => o.liveOrderStatus !== "Cancelled",
     );
-    const totalOrders = enrichedOrders.length;
+    const totalOrders = filteredEnrichedOrders.length;
     const unitsSold = nonCancelled.reduce((s, o) => s + (o.quantity ?? 0), 0);
-    const totalSales = enrichedOrders.reduce(
+    const totalSales = filteredEnrichedOrders.reduce(
       (s, o) => s + (o.totalSaleAmount ?? 0),
       0,
     );
-    const totalSettlement = enrichedOrders.reduce(
+    const totalSettlement = filteredEnrichedOrders.reduce(
       (s, o) => s + (o.finalSettlementAmount ?? 0),
       0,
     );
-    const totalPurchaseCost = enrichedOrders.reduce(
+    const totalPurchaseCost = filteredEnrichedOrders.reduce(
       (s, o) => s + (o.actualPurchaseAmountPaid ?? 0),
       0,
     );
-    const totalCOGS = enrichedOrders.reduce(
+    const totalCOGS = filteredEnrichedOrders.reduce(
       (s, o) => s + (o.taxableCOGS ?? o.actualPurchaseAmountPaid ?? 0),
       0,
     );
-    const grossCashProfit = enrichedOrders.reduce(
+    const grossCashProfit = filteredEnrichedOrders.reduce(
       (s, o) => s + (o.basicCashProfit ?? 0),
       0,
     );
-    const adSpend = ads.reduce(
+    const adSpend = filteredAds.reduce(
       (s, a) => s + (a.totalAdsCost ?? a.adCost ?? 0),
       0,
     );
-    const netProfit = enrichedOrders.reduce(
+    const netProfit = filteredEnrichedOrders.reduce(
       (s, o) => s + (o.netProfit ?? 0),
       0,
     );
@@ -232,19 +235,19 @@ export default function DashboardPage() {
         ? (profitForMargin / settlementForMargin) * 100
         : null;
 
-    const returns = enrichedOrders.filter(
+    const returns = filteredEnrichedOrders.filter(
       (o) => o.liveOrderStatus === "Returned",
     ).length;
-    const rto = enrichedOrders.filter(
+    const rto = filteredEnrichedOrders.filter(
       (o) => o.liveOrderStatus === "RTO",
     ).length;
-    const cancellations = enrichedOrders.filter(
+    const cancellations = filteredEnrichedOrders.filter(
       (o) => o.liveOrderStatus === "Cancelled",
     ).length;
-    const delivered = enrichedOrders.filter(
+    const delivered = filteredEnrichedOrders.filter(
       (o) => o.liveOrderStatus === "Delivered",
     ).length;
-    const shipped = enrichedOrders.filter(
+    const shipped = filteredEnrichedOrders.filter(
       (o) => o.liveOrderStatus === "Shipped",
     ).length;
     const successful = delivered + shipped;
@@ -256,42 +259,42 @@ export default function DashboardPage() {
         s.purchaseCostInclGST === null || s.purchaseCostInclGST === undefined,
     ).length;
     const uniqueSKUs = new Set(
-      enrichedOrders.map((o) => o.supplierSKU).filter(Boolean),
+      filteredEnrichedOrders.map((o) => o.supplierSKU).filter(Boolean),
     ).size;
 
-    const totalLoss = enrichedOrders.reduce((s, o) => {
+    const totalLoss = filteredEnrichedOrders.reduce((s, o) => {
       if (o.netProfit !== null && o.netProfit < 0)
         return s + Math.abs(o.netProfit);
       return s;
     }, 0);
 
-    const negativeSettlements = enrichedOrders.filter(
+    const negativeSettlements = filteredEnrichedOrders.filter(
       (o) =>
         o.finalSettlementAmount !== null &&
         o.finalSettlementAmount !== undefined &&
         o.finalSettlementAmount < 0,
     ).length;
 
-    const cancelledWithSettlement = enrichedOrders.filter(
+    const cancelledWithSettlement = filteredEnrichedOrders.filter(
       (o) =>
         o.liveOrderStatus === "Cancelled" &&
         o.finalSettlementAmount !== null &&
         o.finalSettlementAmount > 0,
     ).length;
 
-    const reviewRequired = enrichedOrders.filter(
+    const reviewRequired = filteredEnrichedOrders.filter(
       (o) => o.rowStatus === "REVIEW_REQUIRED",
     ).length;
 
-    const outputGSTTotal = enrichedOrders.reduce(
+    const outputGSTTotal = filteredEnrichedOrders.reduce(
       (s, o) => s + (o.outputGST ?? 0),
       0,
     );
-    const inputGSTTotal = enrichedOrders.reduce(
+    const inputGSTTotal = filteredEnrichedOrders.reduce(
       (s, o) => s + (o.totalInputGST ?? 0),
       0,
     );
-    const netGSTPayable = enrichedOrders.reduce(
+    const netGSTPayable = filteredEnrichedOrders.reduce(
       (s, o) => s + (o.netGSTPayable ?? 0),
       0,
     );
@@ -325,15 +328,15 @@ export default function DashboardPage() {
       inputGSTTotal,
       netGSTPayable,
     };
-  }, [enrichedOrders, ads, skuCosts]);
+  }, [filteredEnrichedOrders, filteredAds, skuCosts]);
 
   const skuAggs: SKUAggregate[] = useMemo(
-    () => aggregateBySKU(enrichedOrders),
-    [enrichedOrders],
+    () => aggregateBySKU(filteredEnrichedOrders),
+    [filteredEnrichedOrders],
   );
   const monthlyAggs: MonthlyAggregate[] = useMemo(
-    () => aggregateByMonth(enrichedOrders, ads),
-    [enrichedOrders, ads],
+    () => aggregateByMonth(filteredEnrichedOrders, filteredAds),
+    [filteredEnrichedOrders, filteredAds],
   );
 
   const settlementVsCogsChart = useMemo(() => {
@@ -388,7 +391,7 @@ export default function DashboardPage() {
 
   const adSpendByDate = useMemo(() => {
     const m = new Map<string, number>();
-    for (const ad of ads) {
+    for (const ad of filteredAds) {
       if (!ad.deductionDate) continue;
       const key = getMonthKey(ad.deductionDate);
       const label = formatMonthYear(ad.deductionDate);
@@ -397,7 +400,7 @@ export default function DashboardPage() {
       void key;
     }
     return Array.from(m.entries()).map(([month, spend]) => ({ month, spend }));
-  }, [ads]);
+  }, [filteredAds]);
 
   const orderStatusDist = useMemo(() => {
     const dist = {
@@ -408,13 +411,13 @@ export default function DashboardPage() {
       Cancelled: 0,
       Other: 0,
     } as Record<string, number>;
-    for (const o of enrichedOrders) {
+    for (const o of filteredEnrichedOrders) {
       dist[o.liveOrderStatus] = (dist[o.liveOrderStatus] ?? 0) + 1;
     }
     return Object.entries(dist)
       .filter(([, v]) => v > 0)
       .map(([name, value]) => ({ name, value }));
-  }, [enrichedOrders]);
+  }, [filteredEnrichedOrders]);
 
   const returnRTORate = useMemo(() => {
     if (monthlyAggs.length === 0) return [];
@@ -429,12 +432,15 @@ export default function DashboardPage() {
     });
   }, [monthlyAggs]);
 
-  const referralTotal = referrals.reduce((s, r) => s + (r.amount ?? 0), 0);
-  const compensationTotal = compensations.reduce(
+  const referralTotal = filteredReferrals.reduce(
+    (s, r) => s + (r.amount ?? 0),
+    0,
+  );
+  const compensationTotal = filteredCompensations.reduce(
     (s, c) => s + (c.compensationAmount ?? 0),
     0,
   );
-  const recoveryTotal = compensations.reduce(
+  const recoveryTotal = filteredCompensations.reduce(
     (s, c) => s + (c.recoveryAmount ?? 0),
     0,
   );
@@ -515,15 +521,23 @@ export default function DashboardPage() {
             <LayoutDashboard className="w-6 h-6 text-emerald-600" />
             Dashboard
           </h1>
-          <p className="text-slate-600 mt-1 text-sm">
-            Profitability summary · based on {enrichedOrders.length} orders · Ad
-            allocation:{" "}
+          <p className="text-slate-600 mt-1 text-sm flex flex-wrap items-center gap-1.5">
+            Profitability summary · based on {filteredEnrichedOrders.length}
+            {dateFilterType !== "all" && (
+              <>
+                {" "}
+                of{" "}
+                <span className="text-slate-400">{enrichedOrders.length}</span>
+              </>
+            )}{" "}
+            orders · Ad allocation:{" "}
             <Badge variant="info" className="ml-1">
               {userSettings.adAllocationMethod}
             </Badge>
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          <DateRangeFilter />
           <Button
             variant="outline"
             size="sm"
@@ -621,7 +635,7 @@ export default function DashboardPage() {
           value={formatINR(totals.adSpend)}
           icon={Megaphone}
           tone="warn"
-          subtitle={`${ads.length} ad entries`}
+          subtitle={`${filteredAds.length} ad entries`}
         />
         <Kpi
           title="Net Cash Profit"

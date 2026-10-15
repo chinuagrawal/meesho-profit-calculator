@@ -27,31 +27,31 @@ import {
 } from "recharts";
 
 export default function CompensationPage() {
-  const { compensations } = useApp();
+  const { compensations, filteredCompensations, dateFilterType } = useApp();
 
   const totals = useMemo(() => {
-    const comp = compensations.reduce(
+    const comp = filteredCompensations.reduce(
       (s, c) => s + (c.compensationAmount ?? 0),
-      0
+      0,
     );
-    const recov = compensations.reduce(
+    const recov = filteredCompensations.reduce(
       (s, c) => s + (c.recoveryAmount ?? 0),
-      0
+      0,
     );
     return {
       comp,
       recov,
       net: comp - recov,
-      count: compensations.length,
+      count: filteredCompensations.length,
     };
-  }, [compensations]);
+  }, [filteredCompensations]);
 
   const byMonth = useMemo(() => {
     const m = new Map<
       string,
       { label: string; comp: number; recov: number; net: number }
     >();
-    for (const c of compensations) {
+    for (const c of filteredCompensations) {
       if (!c.date) continue;
       const mk = getMonthKey(c.date);
       const label = formatMonthYear(c.date);
@@ -66,16 +66,16 @@ export default function CompensationPage() {
       });
     }
     return Array.from(m.values()).sort((a, b) =>
-      a.label.localeCompare(b.label)
+      a.label.localeCompare(b.label),
     );
-  }, [compensations]);
+  }, [filteredCompensations]);
 
   const byProgram = useMemo(() => {
     const m = new Map<
       string,
       { comp: number; recov: number; net: number; count: number }
     >();
-    for (const c of compensations) {
+    for (const c of filteredCompensations) {
       const key = c.program || c.reason || "(no program)";
       const prev = m.get(key);
       const compC = c.compensationAmount ?? 0;
@@ -91,7 +91,7 @@ export default function CompensationPage() {
       .map(([name, v]) => ({ name, ...v }))
       .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
       .slice(0, 15);
-  }, [compensations]);
+  }, [filteredCompensations]);
 
   return (
     <div className="space-y-5">
@@ -101,8 +101,12 @@ export default function CompensationPage() {
           Compensation & Recovery
         </h1>
         <p className="text-slate-600 mt-1 text-sm">
-          Data read from the <Badge variant="info" className="mx-1">Compensation and Recovery</Badge> sheet.
-          Only attached to individual orders when a reliable order id is present.
+          Data read from the{" "}
+          <Badge variant="info" className="mx-1">
+            Compensation and Recovery
+          </Badge>{" "}
+          sheet. Only attached to individual orders when a reliable order id is
+          present.
         </p>
       </div>
 
@@ -193,7 +197,10 @@ export default function CompensationPage() {
               <tbody className="divide-y divide-slate-100">
                 {byProgram.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-8 text-slate-400 text-sm">
+                    <td
+                      colSpan={5}
+                      className="text-center py-8 text-slate-400 text-sm"
+                    >
                       No data
                     </td>
                   </tr>
@@ -203,7 +210,9 @@ export default function CompensationPage() {
                       <td className="py-2 pr-2 truncate max-w-[180px]">
                         {r.name}
                       </td>
-                      <td className="py-2 text-right tabular-nums">{r.count}</td>
+                      <td className="py-2 text-right tabular-nums">
+                        {r.count}
+                      </td>
                       <td className="py-2 text-right tabular-nums text-emerald-700">
                         {formatINR(r.comp)}
                       </td>
@@ -230,7 +239,8 @@ export default function CompensationPage() {
       <Card className="overflow-hidden">
         <CardHeader className="border-b">
           <CardTitle className="text-base">
-            Entries ({compensations.length})
+            Entries ({filteredCompensations.length}
+            {dateFilterType !== "all" && ` of ${compensations.length}`})
           </CardTitle>
         </CardHeader>
         <div className="overflow-x-auto scrollbar-thin">
@@ -242,24 +252,27 @@ export default function CompensationPage() {
                 <th className="text-left font-semibold px-3 py-2.5">Reason</th>
                 <th className="text-left font-semibold px-3 py-2.5">Order</th>
                 <th className="text-right font-semibold px-3 py-2.5">Comp</th>
-                <th className="text-right font-semibold px-3 py-2.5">Recovery</th>
+                <th className="text-right font-semibold px-3 py-2.5">
+                  Recovery
+                </th>
                 <th className="text-right font-semibold px-3 py-2.5">Net</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {compensations.length === 0 ? (
+              {filteredCompensations.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
                     className="text-center py-12 text-slate-500 text-sm"
                   >
                     <RefreshCcw className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                    No compensation / recovery data. Upload a Meesho report
-                    with the Compensation and Recovery sheet.
+                    {compensations.length === 0
+                      ? "No compensation / recovery data. Upload a Meesho report with the Compensation and Recovery sheet."
+                      : "No entries match the current filters."}
                   </td>
                 </tr>
               ) : (
-                compensations.slice(0, 500).map((c) => {
+                filteredCompensations.slice(0, 500).map((c) => {
                   const net =
                     (c.compensationAmount ?? 0) - (c.recoveryAmount ?? 0);
                   return (

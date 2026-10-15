@@ -15,6 +15,20 @@ export type AdAllocationMethod =
 
 export type ProfitView = "cash" | "accounting" | "net";
 
+export type DateFilterType =
+  | "all"
+  | "today"
+  | "thisWeek"
+  | "lastWeek"
+  | "thisMonth"
+  | "lastMonth"
+  | "custom";
+
+export interface DateRange {
+  start: Date | null;
+  end: Date | null;
+}
+
 export type ReturnProductCondition = "usable" | "damaged" | "manual";
 
 export type PerOrderReturnCondition = "usable" | "damaged";
@@ -268,4 +282,5 @@ export interface AppData {
   skuCosts: SKUCost[];
   gstSettings: GSTSettings;
   userSettings: UserSettings;
+  returnOverrides?: Record<string, "usable" | "damaged">;
 }

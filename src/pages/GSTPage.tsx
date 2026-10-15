@@ -21,7 +21,14 @@ import { formatINR, formatNumber, formatPercent } from "@/lib/utils";
 const GST_OPTIONS = [0, 5, 12, 18, 28];
 
 export default function GSTPage() {
-  const { gstSettings, setGSTSettings, enrichedOrders, skuCosts } = useApp();
+  const {
+    gstSettings,
+    setGSTSettings,
+    enrichedOrders,
+    filteredEnrichedOrders,
+    dateFilterType,
+  } = useApp();
+  void dateFilterType;
 
   const summary = useMemo(() => {
     let purchaseInclGST = 0;
@@ -31,7 +38,7 @@ export default function GSTPage() {
     let outputGSTActual = 0;
     let hasActualOutputGST = false;
 
-    for (const o of enrichedOrders) {
+    for (const o of filteredEnrichedOrders) {
       if (o.totalInputGST !== null && o.totalInputGST !== undefined) {
         inputGST += o.totalInputGST;
       }
@@ -65,7 +72,7 @@ export default function GSTPage() {
       eligibleInputGST,
       estimatedPayable,
     };
-  }, [enrichedOrders, gstSettings]);
+  }, [filteredEnrichedOrders, gstSettings]);
 
   return (
     <div className="space-y-5">

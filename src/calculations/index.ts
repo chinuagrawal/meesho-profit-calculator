@@ -5,18 +5,21 @@ import {
   SKUCost,
   GSTSettings,
   RTOSettings,
+  ReturnSettings,
   AdsCostEntry,
   AdAllocationMethod,
   SKUAggregate,
   MonthlyAggregate,
   OrderStatus,
   CalculationStatus,
+  PerOrderReturnCondition,
 } from "@/types";
 import {
   parseNumeric,
   safeDivide,
   getMonthKey,
   formatMonthYear,
+  normalizeSKU,
 } from "@/lib/utils";
 
 export function calculatePurchaseGSTComponents(
@@ -57,7 +60,11 @@ export function calculateOutputGST(
     finalSettlementAmount === undefined ||
     isNaN(finalSettlementAmount)
   ) {
-    return { outputGST: null, isEstimated: false, gstExclusiveSettlement: null };
+    return {
+      outputGST: null,
+      isEstimated: false,
+      gstExclusiveSettlement: null,
+    };
   }
 
   if (
@@ -128,6 +135,8 @@ export function calculateOrderProfit(
   skuCost: SKUCost | undefined,
   gstSettings: GSTSettings,
   rtoSettings: RTOSettings,
+  returnSettings: ReturnSettings,
+  returnOverride: PerOrderReturnCondition | undefined,
   adAllocationPerOrder: number | null,
 ): OrderProfitResult {
   const warnings: string[] = [];
@@ -151,9 +160,7 @@ export function calculateOrderProfit(
   const hasMissingCost = purchaseCostPerUnitInclGST === null;
 
   const gstRate =
-    skuCost?.gstRate ??
-    order.productGSTPercent ??
-    gstSettings.purchaseGSTRate;
+    skuCost?.gstRate ?? order.productGSTPercent ?? gstSettings.purchaseGSTRate;
 
   const perUnit = calculatePurchaseGSTComponents(
     purchaseCostPerUnitInclGST,
@@ -171,6 +178,51 @@ export function calculateOrderProfit(
     }
     if (perUnit.inputGST !== null) {
       totalInputGST = quantity * perUnit.inputGST;
+    }
+  }
+
+  let returnBreakdown: OrderProfitResult["returnBreakdown"] = undefined;
+
+  if (status === "Returned") {
+    const isManualOverride = returnOverride !== undefined;
+    const globalCond = returnSettings.returnProductCondition;
+    let effectiveCondition: PerOrderReturnCondition;
+
+    if (isManualOverride) {
+      effectiveCondition = returnOverride as PerOrderReturnCondition;
+    } else if (globalCond === "manual") {
+      effectiveCondition = "usable";
+      warnings.push(
+        "Manual / Per-Order return mode active but no override set — defaulting to Returned & Usable",
+      );
+    } else {
+      effectiveCondition = globalCond as PerOrderReturnCondition;
+    }
+
+    const returnShippingCharge =
+      order.meeshoFees.returnShippingCharge !== null &&
+      order.meeshoFees.returnShippingCharge !== undefined &&
+      !isNaN(order.meeshoFees.returnShippingCharge)
+        ? order.meeshoFees.returnShippingCharge
+        : 0;
+
+    const purchaseCostLoss =
+      effectiveCondition === "damaged" && totalPurchaseCostInclGST !== null
+        ? totalPurchaseCostInclGST
+        : 0;
+
+    returnBreakdown = {
+      effectiveCondition,
+      isManualOverride,
+      returnShippingCharge,
+      purchaseCostLoss,
+      totalReturnLoss: purchaseCostLoss + Math.max(0, returnShippingCharge),
+    };
+
+    if (effectiveCondition === "usable") {
+      totalPurchaseCostInclGST = 0;
+      totalPurchaseCostExclGST = 0;
+      totalInputGST = 0;
     }
   }
 
@@ -198,7 +250,11 @@ export function calculateOrderProfit(
   let cashProfitBeforeAds: number | null = null;
   if (settlement !== null && totalPurchaseCostInclGST !== null) {
     cashProfitBeforeAds = settlement - totalPurchaseCostInclGST;
-  } else if (settlement !== null && status === "RTO" && !rtoSettings.chargeProductCostOnRTO) {
+  } else if (
+    settlement !== null &&
+    status === "RTO" &&
+    !rtoSettings.chargeProductCostOnRTO
+  ) {
     cashProfitBeforeAds = settlement;
   }
 
@@ -223,11 +279,11 @@ export function calculateOrderProfit(
   ) {
     const accountingCOGS = gstSettings.itcEligible
       ? totalPurchaseCostExclGST
-      : totalPurchaseCostInclGST ?? totalPurchaseCostExclGST;
+      : (totalPurchaseCostInclGST ?? totalPurchaseCostExclGST);
     gstAdjustedProfit = outGST.gstExclusiveSettlement - accountingCOGS;
 
     if (outGST.outputGST !== null) {
-      const eligibleInput = gstSettings.itcEligible ? totalInputGST ?? 0 : 0;
+      const eligibleInput = gstSettings.itcEligible ? (totalInputGST ?? 0) : 0;
       netGSTPayable = outGST.outputGST - eligibleInput;
     }
   }
@@ -277,6 +333,7 @@ export function calculateOrderProfit(
     status,
     calculationStatus,
     warnings,
+    returnBreakdown,
   };
 }
 
@@ -338,6 +395,8 @@ export function enrichOrderWithCalculations(
   skuCostMap: Map<string, SKUCost>,
   gstSettings: GSTSettings,
   rtoSettings: RTOSettings,
+  returnSettings: ReturnSettings,
+  returnOverrideMap: Map<string, PerOrderReturnCondition>,
   adAllocationMap: Map<string, number>,
 ): OrderWithCalculations {
   const skuCost = skuCostMap.get(order.supplierSKU);
@@ -351,11 +410,16 @@ export function enrichOrderWithCalculations(
   const perUnit = calculatePurchaseGSTComponents(purchaseCostPerUnit, gstRate);
 
   const adAlloc = adAllocationMap.get(order.id) ?? null;
+  const returnOverride = order.subOrderNo
+    ? returnOverrideMap.get(order.subOrderNo)
+    : undefined;
   const result = calculateOrderProfit(
     order,
     skuCost,
     gstSettings,
     rtoSettings,
+    returnSettings,
+    returnOverride,
     adAlloc,
   );
 
@@ -397,6 +461,7 @@ export function enrichOrderWithCalculations(
     outputGSTEstimated: result.outputGSTEstimated,
     netGSTPayable: result.netGSTPayable,
     gstAdjustedProfit: result.gstAdjustedProfit,
+    returnBreakdown: result.returnBreakdown,
   };
 }
 
@@ -405,13 +470,26 @@ export function enrichAllOrders(
   skuCosts: SKUCost[],
   gstSettings: GSTSettings,
   rtoSettings: RTOSettings,
+  returnSettings: ReturnSettings,
+  returnOverrides: Record<string, PerOrderReturnCondition>,
   adsEntries: AdsCostEntry[],
   adMethod: AdAllocationMethod,
 ): OrderWithCalculations[] {
   const skuCostMap = new Map(skuCosts.map((s) => [s.supplierSKU, s]));
+  const returnOverrideMap = new Map(
+    Object.entries(returnOverrides) as [string, PerOrderReturnCondition][],
+  );
   const adAllocMap = calculateAdAllocation(orders, adsEntries, adMethod);
   return orders.map((o) =>
-    enrichOrderWithCalculations(o, skuCostMap, gstSettings, rtoSettings, adAllocMap),
+    enrichOrderWithCalculations(
+      o,
+      skuCostMap,
+      gstSettings,
+      rtoSettings,
+      returnSettings,
+      returnOverrideMap,
+      adAllocMap,
+    ),
   );
 }
 
@@ -421,11 +499,11 @@ export function aggregateBySKU(
   const map = new Map<string, SKUAggregate>();
 
   for (const order of enrichedOrders) {
-    const sku = order.supplierSKU;
-    if (!map.has(sku)) {
-      map.set(sku, {
-        supplierSKU: sku,
-        productName: order.productName || sku,
+    const skuKey = normalizeSKU(order.supplierSKU);
+    if (!map.has(skuKey)) {
+      map.set(skuKey, {
+        supplierSKU: order.supplierSKU.trim(),
+        productName: order.productName || order.supplierSKU.trim(),
         units: 0,
         unitsSold: 0,
         sales: 0,
@@ -444,7 +522,7 @@ export function aggregateBySKU(
         hasMissingCost: false,
       });
     }
-    const agg = map.get(sku)!;
+    const agg = map.get(skuKey)!;
     agg.units += order.quantity ?? 0;
     if (
       order.liveOrderStatus === "Delivered" ||

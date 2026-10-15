@@ -53,8 +53,8 @@ function buildOrderDetailsRows(orders: OrderWithCalculations[]) {
     "Supplier SKU": o.supplierSKU,
     Quantity: o.quantity,
     "Live Order Status": o.liveOrderStatus,
-    "Order Value": fmt(o.orderValue),
-    "Selling Price / Unit": fmt(o.sellingPricePerUnit),
+    "Order Value": fmt(o.totalSaleAmount),
+    "Selling Price / Unit": fmt(o.listingPrice),
     "Settlement Amount": fmt(o.finalSettlementAmount),
     "Actual GST (from report)": fmt(o.actualGSTAmount),
     "Est. Output GST": fmt(o.outputGST),
@@ -73,14 +73,25 @@ function buildOrderDetailsRows(orders: OrderWithCalculations[]) {
   }));
 }
 
-function buildSKUAnalysisRows(skus: SKUAggregate[]) {
+function buildSKUAnalysisRows(
+  skus: SKUAggregate[],
+  orders: OrderWithCalculations[],
+) {
+  const orderCounts = new Map<string, number>();
+  for (const order of orders) {
+    orderCounts.set(
+      order.supplierSKU,
+      (orderCounts.get(order.supplierSKU) ?? 0) + 1,
+    );
+  }
+
   return skus.map((s) => ({
     "Supplier SKU": s.supplierSKU,
     "Product Name": s.productName,
-    "Orders Count": s.orders,
+    "Orders Count": orderCounts.get(s.supplierSKU) ?? 0,
     "Units Sold": s.unitsSold ?? s.units,
     "Sales Amount": fmt(s.sales),
-    "Settlement": fmt(s.settlement),
+    Settlement: fmt(s.settlement),
     "COGS (Excl GST)": fmt(s.cogs),
     "Input GST": fmt(s.inputGST),
     "Ad Cost": fmt(s.adCost),
@@ -107,7 +118,10 @@ function buildGSTSummaryRows(
   let hasActual = false;
 
   for (const o of orders) {
-    if (o.actualPurchaseAmountPaid !== null && o.actualPurchaseAmountPaid !== undefined) {
+    if (
+      o.actualPurchaseAmountPaid !== null &&
+      o.actualPurchaseAmountPaid !== undefined
+    ) {
       purchaseInclGST += o.actualPurchaseAmountPaid;
     }
     if (o.taxableCOGS !== null && o.taxableCOGS !== undefined) {
@@ -131,9 +145,18 @@ function buildGSTSummaryRows(
   const netPayable = totalOutputGST - eligibleInputGST;
 
   return [
-    { Setting: "GST Registered?", Value: gstSettings.gstRegistered ? "Yes" : "No" },
-    { Setting: "Default Purchase GST Rate", Value: `${gstSettings.purchaseGSTRate}%` },
-    { Setting: "Default Selling GST Rate", Value: `${gstSettings.sellingGSTRate}%` },
+    {
+      Setting: "GST Registered?",
+      Value: gstSettings.gstRegistered ? "Yes" : "No",
+    },
+    {
+      Setting: "Default Purchase GST Rate",
+      Value: `${gstSettings.purchaseGSTRate}%`,
+    },
+    {
+      Setting: "Default Selling GST Rate",
+      Value: `${gstSettings.sellingGSTRate}%`,
+    },
     { Setting: "ITC Eligible?", Value: gstSettings.itcEligible ? "Yes" : "No" },
     { Setting: "", Value: "" },
     { Setting: "Purchase Amount (Incl GST)", Value: fmt(purchaseInclGST) },
@@ -141,12 +164,26 @@ function buildGSTSummaryRows(
     { Setting: "Input GST (Purchase Side)", Value: fmt(inputGST) },
     { Setting: "", Value: "" },
     { Setting: "Output GST (Actual from Report)", Value: fmt(outputGSTActual) },
-    { Setting: "Output GST (Estimated from Settings)", Value: fmt(outputGSTEstimated) },
+    {
+      Setting: "Output GST (Estimated from Settings)",
+      Value: fmt(outputGSTEstimated),
+    },
     { Setting: "Total Output GST", Value: fmt(totalOutputGST) },
     { Setting: "", Value: "" },
-    { Setting: "Eligible Input Tax Credit (ITC)", Value: fmt(eligibleInputGST) },
-    { Setting: "Estimated Net GST Payable (Before Adjustments)", Value: fmt(netPayable) },
-    { Setting: "Actual Output GST Present?", Value: hasActual ? "Yes — partially or fully actual" : "No — all estimated from settings" },
+    {
+      Setting: "Eligible Input Tax Credit (ITC)",
+      Value: fmt(eligibleInputGST),
+    },
+    {
+      Setting: "Estimated Net GST Payable (Before Adjustments)",
+      Value: fmt(netPayable),
+    },
+    {
+      Setting: "Actual Output GST Present?",
+      Value: hasActual
+        ? "Yes — partially or fully actual"
+        : "No — all estimated from settings",
+    },
   ];
 }
 
@@ -158,10 +195,11 @@ function buildAdSummaryRows(
   const byCampaign = new Map<string, { spend: number; orders: number }>();
   let totalSpend = 0;
   for (const a of ads) {
-    totalSpend += a.adsCost ?? 0;
-    const key = a.campaignName || "Unspecified";
+    const spend = a.totalAdsCost ?? a.adCost ?? 0;
+    totalSpend += spend;
+    const key = a.campaignID || "Unspecified";
     const cur = byCampaign.get(key) ?? { spend: 0, orders: 0 };
-    cur.spend += a.adsCost ?? 0;
+    cur.spend += spend;
     byCampaign.set(key, cur);
   }
 
@@ -177,7 +215,10 @@ function buildAdSummaryRows(
     },
     { Column: "Total Ad Spend (from report)", Value: fmt(totalSpend) },
     { Column: "Total Allocated to Orders", Value: fmt(totalAllocated) },
-    { Column: "Unallocated Difference", Value: fmt(totalSpend - totalAllocated) },
+    {
+      Column: "Unallocated Difference",
+      Value: fmt(totalSpend - totalAllocated),
+    },
     { Column: "", Value: "" },
     { Column: "Campaign Name", Value: "Total Spend" },
   ];
@@ -191,17 +232,20 @@ function buildAdSummaryRows(
   return rows;
 }
 
-function buildMissingCostsRows(skuCosts: SKUCost[], orders: OrderWithCalculations[]) {
-  const uniqueMissing = new Map<string, { sku: string; product: string; orderCount: number }>();
+function buildMissingCostsRows(
+  skuCosts: SKUCost[],
+  orders: OrderWithCalculations[],
+) {
+  const uniqueMissing = new Map<
+    string,
+    { sku: string; product: string; orderCount: number }
+  >();
 
   for (const s of skuCosts) {
-    if (
-      s.purchaseCostInclGST === null ||
-      s.purchaseCostInclGST === undefined
-    ) {
+    if (s.purchaseCostInclGST === null || s.purchaseCostInclGST === undefined) {
       uniqueMissing.set(s.supplierSKU, {
         sku: s.supplierSKU,
-        product: s.productName,
+        product: s.productName || "",
         orderCount: 0,
       });
     }
@@ -293,31 +337,48 @@ function buildValidationReportRows(
     { Metric: "Quality / Data Checks", Value: "" },
     { Metric: "  · Missing SKU Costs (SKU count)", Value: missingSKUs },
     { Metric: "  · Negative Settlement Orders", Value: negativeSettlement },
-    { Metric: "  · Cancelled Orders With Settlement", Value: cancelledWithSettlement },
+    {
+      Metric: "  · Cancelled Orders With Settlement",
+      Value: cancelledWithSettlement,
+    },
     { Metric: "  · Orders Requiring Manual Review", Value: reviewRequired },
-    { Metric: "  · Orders With Zero Settlement (incl. Cancelled/RTO)", Value: zeroSettlement },
+    {
+      Metric: "  · Orders With Zero Settlement (incl. Cancelled/RTO)",
+      Value: zeroSettlement,
+    },
     { Metric: "  · Orders With Warnings", Value: withWarnings },
   );
 
   // Warn about common issues
   const common: any[] = [];
   if (missingSKUs > 0) {
-    common.push({ Warning: `${missingSKUs} SKU(s) missing purchase cost — profit not calculable for these orders` });
+    common.push({
+      Warning: `${missingSKUs} SKU(s) missing purchase cost — profit not calculable for these orders`,
+    });
   }
   if (negativeSettlement > 0) {
-    common.push({ Warning: `${negativeSettlement} order(s) have negative settlement (Meesho debits)` });
+    common.push({
+      Warning: `${negativeSettlement} order(s) have negative settlement (Meesho debits)`,
+    });
   }
   if (cancelledWithSettlement > 0) {
-    common.push({ Warning: `${cancelledWithSettlement} cancelled order(s) still have settlement — verify manually` });
+    common.push({
+      Warning: `${cancelledWithSettlement} cancelled order(s) still have settlement — verify manually`,
+    });
   }
   if (reviewRequired > 0) {
-    common.push({ Warning: `${reviewRequired} order(s) flagged REVIEW REQUIRED` });
+    common.push({
+      Warning: `${reviewRequired} order(s) flagged REVIEW REQUIRED`,
+    });
   }
   if (common.length === 0) {
     common.push({ Warning: "No obvious data-quality issues detected." });
   }
 
-  rows.push({ Metric: "", Value: "" }, { Metric: "Data Quality Warnings", Value: "" });
+  rows.push(
+    { Metric: "", Value: "" },
+    { Metric: "Data Quality Warnings", Value: "" },
+  );
   for (const c of common) {
     rows.push({ Metric: `  · ${c.Warning}`, Value: "" });
   }
@@ -336,23 +397,23 @@ export interface ExportInputs {
 }
 
 export function buildExportWorkbook(inputs: ExportInputs) {
-  const {
-    orders,
-    skuCosts,
-    ads,
-    gstSettings,
-    userSettings,
-  } = inputs;
+  const { orders, skuCosts, ads, gstSettings, userSettings } = inputs;
 
   const skuAggs: SKUAggregate[] = aggregateBySKU(orders);
 
   const ws1 = XLSX.utils.json_to_sheet(buildProfitReportRows(orders));
   const ws2 = XLSX.utils.json_to_sheet(buildOrderDetailsRows(orders));
-  const ws3 = XLSX.utils.json_to_sheet(buildSKUAnalysisRows(skuAggs));
-  const ws4 = XLSX.utils.json_to_sheet(buildGSTSummaryRows(orders, gstSettings));
-  const ws5 = XLSX.utils.json_to_sheet(buildAdSummaryRows(ads, orders, userSettings));
+  const ws3 = XLSX.utils.json_to_sheet(buildSKUAnalysisRows(skuAggs, orders));
+  const ws4 = XLSX.utils.json_to_sheet(
+    buildGSTSummaryRows(orders, gstSettings),
+  );
+  const ws5 = XLSX.utils.json_to_sheet(
+    buildAdSummaryRows(ads, orders, userSettings),
+  );
   const ws6 = XLSX.utils.json_to_sheet(buildMissingCostsRows(skuCosts, orders));
-  const ws7 = XLSX.utils.json_to_sheet(buildValidationReportRows(orders, skuCosts));
+  const ws7 = XLSX.utils.json_to_sheet(
+    buildValidationReportRows(orders, skuCosts),
+  );
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws1, "1 Profit Report");

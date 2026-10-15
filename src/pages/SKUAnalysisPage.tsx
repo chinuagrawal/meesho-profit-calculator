@@ -24,7 +24,8 @@ import { useApp } from "@/context/AppContext";
 import { aggregateBySKU } from "@/calculations";
 import { formatINR, formatPercent, formatNumber } from "@/lib/utils";
 import { SKUAggregate } from "@/types";
-import { cn } from "@/lib/utils";
+import { cn, normalizeSKU } from "@/lib/utils";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
 
 type SortKey =
   | "profit-desc"
@@ -41,15 +42,15 @@ type SortKey =
 
 export default function SKUAnalysisPage() {
   const navigate = useNavigate();
-  const { enrichedOrders } = useApp();
+  const { enrichedOrders, filteredEnrichedOrders, dateFilterType } = useApp();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("profit-desc");
   const [missingOnly, setMissingOnly] = useState(false);
   const [selectedSKU, setSelectedSKU] = useState<string | null>(null);
 
   const skuAggs: SKUAggregate[] = useMemo(
-    () => aggregateBySKU(enrichedOrders),
-    [enrichedOrders]
+    () => aggregateBySKU(filteredEnrichedOrders),
+    [filteredEnrichedOrders],
   );
 
   const filtered = useMemo(() => {
@@ -60,7 +61,7 @@ export default function SKUAnalysisPage() {
       list = list.filter(
         (s) =>
           s.supplierSKU.toLowerCase().includes(q) ||
-          s.productName.toLowerCase().includes(q)
+          s.productName.toLowerCase().includes(q),
       );
     }
     const copy = list.slice();
@@ -81,7 +82,9 @@ export default function SKUAnalysisPage() {
         copy.sort((a, b) => b.sales - a.sales);
         break;
       case "units-desc":
-        copy.sort((a, b) => (b.unitsSold ?? b.units) - (a.unitsSold ?? a.units));
+        copy.sort(
+          (a, b) => (b.unitsSold ?? b.units) - (a.unitsSold ?? a.units),
+        );
         break;
       case "roi-desc":
         copy.sort((a, b) => (b.roi ?? -Infinity) - (a.roi ?? -Infinity));
@@ -95,12 +98,13 @@ export default function SKUAnalysisPage() {
       case "profitPerUnit-desc":
         copy.sort(
           (a, b) =>
-            (b.profitPerUnit ?? -Infinity) - (a.profitPerUnit ?? -Infinity)
+            (b.profitPerUnit ?? -Infinity) - (a.profitPerUnit ?? -Infinity),
         );
         break;
       case "profitPerUnit-asc":
         copy.sort(
-          (a, b) => (a.profitPerUnit ?? Infinity) - (b.profitPerUnit ?? Infinity)
+          (a, b) =>
+            (a.profitPerUnit ?? Infinity) - (b.profitPerUnit ?? Infinity),
         );
         break;
     }
@@ -109,8 +113,10 @@ export default function SKUAnalysisPage() {
 
   const ordersForSKU = useMemo(() => {
     if (!selectedSKU) return [];
-    return enrichedOrders.filter((o) => o.supplierSKU === selectedSKU);
-  }, [enrichedOrders, selectedSKU]);
+    return filteredEnrichedOrders.filter(
+      (o) => normalizeSKU(o.supplierSKU) === normalizeSKU(selectedSKU),
+    );
+  }, [filteredEnrichedOrders, selectedSKU]);
 
   const selected = selectedSKU
     ? skuAggs.find((s) => s.supplierSKU === selectedSKU)
@@ -125,9 +131,23 @@ export default function SKUAnalysisPage() {
             SKU Analysis
           </h1>
           <p className="text-slate-600 mt-1 text-sm">
-            {filtered.length} of {skuAggs.length} SKUs · Click a row to drill
-            down into its orders.
+            {filtered.length} of {skuAggs.length} SKUs
+            {dateFilterType !== "all" && (
+              <>
+                {" "}
+                ·
+                <span className="text-slate-400">
+                  {" "}
+                  {filteredEnrichedOrders.length} of {enrichedOrders.length}{" "}
+                  orders
+                </span>
+              </>
+            )}{" "}
+            · Click a row to drill down into its orders.
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <DateRangeFilter />
         </div>
       </div>
 
@@ -344,9 +364,9 @@ export default function SKUAnalysisPage() {
                 <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
                   <Stat
                     label="Units Sold"
-                    value={(selected.unitsSold ?? selected.units).toLocaleString(
-                      "en-IN",
-                    )}
+                    value={(
+                      selected.unitsSold ?? selected.units
+                    ).toLocaleString("en-IN")}
                   />
                   <Stat
                     label="Profit / Unit"
