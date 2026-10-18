@@ -3,7 +3,6 @@ import { RefreshCcw, Plus, Minus, IndianRupee } from "lucide-react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
   Badge,

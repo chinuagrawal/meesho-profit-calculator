@@ -20,11 +20,10 @@ import {
 import { useApp } from "@/context/AppContext";
 import { aggregateBySKU } from "@/calculations";
 import { formatINR, formatNumber, formatPercent } from "@/lib/utils";
-import { calculatePurchaseGSTComponents } from "@/calculations";
 import { SKUAggregate } from "@/types";
 
 export default function BreakEvenPage() {
-  const { filteredEnrichedOrders, gstSettings, dateFilterType } = useApp();
+  const { filteredEnrichedOrders, gstSettings, dateFilterType, skuCosts } = useApp();
   const skuAggs: SKUAggregate[] = useMemo(
     () => aggregateBySKU(filteredEnrichedOrders),
     [filteredEnrichedOrders],
@@ -35,17 +34,22 @@ export default function BreakEvenPage() {
   );
   const [desiredProfitPerUnit, setDesiredProfitPerUnit] = useState<string>("");
 
+  const [packaging, setPackaging] = useState("0");
+  const [overhead, setOverhead] = useState("0");
+  const [returnRate, setReturnRate] = useState("0");
+  const [returnLoss, setReturnLoss] = useState("0");
   const current = skuAggs.find((s) => s.supplierSKU === selectedSKU);
+  const purchaseCost = skuCosts.find(s => s.supplierSKU.trim().toLowerCase() === selectedSKU.trim().toLowerCase());
+  const assumptions = [packaging, overhead, returnRate, returnLoss].map(Number);
+  const assumptionsValid = assumptions.every(n => Number.isFinite(n) && n >= 0) && assumptions[2] <= 100;
+  const extraCost = assumptions[0] + assumptions[1] + assumptions[2] / 100 * assumptions[3];
 
   // Estimate avg settlement per unit for this SKU
   const currentStats = useMemo(() => {
     if (!current) return null;
     const units = current.units || 1;
     const settlementPerUnit = current.settlement / units;
-    const purchasePerUnit =
-      current.purchaseCost !== null && current.units > 0
-        ? current.purchaseCost / current.units
-        : null;
+    const purchasePerUnit = purchaseCost?.purchaseCostInclGST ?? null;
     const profitPerUnit =
       current.profit !== null && current.units > 0
         ? current.profit / current.units
@@ -58,7 +62,7 @@ export default function BreakEvenPage() {
           ? gstSettings.purchaseGSTRate
           : null
         : null;
-    const rate =
+    const rate = purchaseCost?.gstRate ??
       perRate ??
       (current.hasMissingCost ? gstSettings.purchaseGSTRate : null) ??
       gstSettings.purchaseGSTRate;
@@ -78,7 +82,7 @@ export default function BreakEvenPage() {
           ? (profitPerUnit / purchasePerUnit) * 100
           : null,
     };
-  }, [current, gstSettings]);
+  }, [current, gstSettings, purchaseCost]);
 
   const desiredNum = useMemo(() => {
     const n = parseFloat(desiredProfitPerUnit);
@@ -86,18 +90,13 @@ export default function BreakEvenPage() {
   }, [desiredProfitPerUnit]);
 
   const requiredCalc = useMemo(() => {
-    if (!currentStats || !desiredNum) return null;
-    const rate = currentStats.gstRate;
+    if (!currentStats || desiredNum === null || desiredNum < 0 || !assumptionsValid) return null;
     const purchase = currentStats.purchasePerUnit; // incl GST
     const ad = currentStats.adPerUnit;
     if (purchase === null) return null;
 
-    const components = calculatePurchaseGSTComponents(purchase, rate);
-    const taxable = components.taxableCost ?? purchase;
-    const inputGST = components.inputGST ?? 0;
-
     // Required settlement = purchase (incl GST) + desired profit + ad
-    const requiredSettlementPerUnit = purchase + desiredNum + ad;
+    const requiredSettlementPerUnit = purchase + desiredNum + ad + extraCost;
     const grossSettlement = requiredSettlementPerUnit * currentStats.units;
 
     // Historical fee ratio: (Sale - Settlement) / Sale per unit
@@ -110,10 +109,8 @@ export default function BreakEvenPage() {
             (avgSalePerUnit - currentStats.settlementPerUnit) / avgSalePerUnit,
           )
         : 0.15;
-    const estimatedSellingPrice =
-      feeRatio >= 1
-        ? requiredSettlementPerUnit
-        : requiredSettlementPerUnit / (1 - feeRatio);
+    if (feeRatio >= 1) return null;
+    const estimatedSellingPrice = requiredSettlementPerUnit / (1 - feeRatio);
 
     return {
       requiredSettlementPerUnit,
@@ -121,7 +118,7 @@ export default function BreakEvenPage() {
       feeRatio,
       estimatedSellingPrice,
     };
-  }, [currentStats, desiredNum, current]);
+  }, [currentStats, desiredNum, current, assumptionsValid, extraCost]);
 
   return (
     <div className="space-y-5 max-w-5xl mx-auto">
@@ -206,7 +203,18 @@ export default function BreakEvenPage() {
               </div>
             </div>
 
-            {!current?.hasMissingCost === false && (
+            <fieldset className="grid grid-cols-2 gap-3">
+              <legend className="text-sm font-semibold mb-2">Additional costs per unit</legend>
+              {[
+                ["Packaging (INR)", packaging, setPackaging],
+                ["Overhead (INR)", overhead, setOverhead],
+                ["Expected return rate (%)", returnRate, setReturnRate],
+                ["Loss per return (INR)", returnLoss, setReturnLoss],
+              ].map(([label, value, setter]) => <label key={String(label)} className="text-xs text-slate-600">{String(label)}<Input type="number" min="0" max={label === "Expected return rate (%)" ? 100 : undefined} step="0.01" value={value as string} onChange={e => (setter as (value: string) => void)(e.target.value)} className="mt-1" /></label>)}
+            </fieldset>
+            <p className="text-xs text-slate-500">Expected return cost = return rate × loss per return. Include only costs not already covered by the historical settlement ratio.</p>
+            {!assumptionsValid && <Alert variant="warning">Enter nonnegative costs and a return rate between 0 and 100.</Alert>}
+            {current?.hasMissingCost && (
               <Alert
                 variant="warning"
                 className="text-xs flex items-start gap-2"
@@ -344,7 +352,7 @@ export default function BreakEvenPage() {
                 label="Required Meesho Settlement / Unit"
                 value={formatINR(requiredCalc.requiredSettlementPerUnit)}
                 tone="info"
-                sub="= Purchase + Desired Profit + Ad"
+                sub="Purchase + Profit + Ads + Packaging + Overhead + Expected Return Loss"
               />
               <ResultCard
                 label="Estimated Selling Price / Unit *"
@@ -382,7 +390,7 @@ export default function BreakEvenPage() {
           ) : (
             <div className="text-center py-10 text-slate-500 text-sm">
               <Tag className="w-10 h-10 mx-auto mb-2 opacity-40" />
-              Select a SKU and enter a desired profit to see estimates.
+              Select a SKU with a purchase cost and enter a desired profit (zero for break-even). Estimates require a historical settlement ratio above zero.
             </div>
           )}
         </CardContent>

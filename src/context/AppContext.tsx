@@ -1,3 +1,5 @@
+import { usableAds } from "@/lib/adIntegrity";
+import { mergeOrders, mergeEntries, parseBackup } from "@/services/dataIntegrity";
 import React, {
   createContext,
   useContext,
@@ -113,7 +115,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           storage.getAllCompensations(),
         ]);
         setOrders(o);
-        setAds(a);
+        setAds(a.map(ad => usableAds([ad])[0] ?? ad));
         setReferrals(r);
         setCompensations(c);
       } catch (err) {
@@ -129,35 +131,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const importParsedData = useCallback(
     async (parsed: ParsedWorkbook, overwrite: boolean) => {
-      let mergedOrders = parsed.orders;
-      let mergedAds = parsed.ads;
-      let mergedReferrals = parsed.referrals;
-      let mergedCompensations = parsed.compensations;
+      let mergedOrders = mergeOrders([], parsed.orders);
+      let mergedAds = mergeEntries([], parsed.ads);
+      let mergedReferrals = mergeEntries([], parsed.referrals);
+      let mergedCompensations = mergeEntries([], parsed.compensations);
 
       if (!overwrite) {
-        const existingSubOrderNos = new Set(
-          orders.map((o) => o.subOrderNo).filter(Boolean),
-        );
-        const existingOrderIds = new Set(orders.map((o) => o.id));
-        mergedOrders = [
-          ...orders,
-          ...parsed.orders.filter(
-            (o) =>
-              !(o.subOrderNo && existingSubOrderNos.has(o.subOrderNo)) &&
-              !existingOrderIds.has(o.id),
-          ),
-        ];
-        mergedAds = [...ads, ...parsed.ads];
-        mergedReferrals = [...referrals, ...parsed.referrals];
-        mergedCompensations = [...compensations, ...parsed.compensations];
+        mergedOrders = mergeOrders(orders, parsed.orders);
+        mergedAds = mergeEntries(usableAds(ads), usableAds(parsed.ads));
+        mergedReferrals = mergeEntries(referrals, parsed.referrals);
+        mergedCompensations = mergeEntries(compensations, parsed.compensations);
       }
 
-      await Promise.all([
-        storage.saveOrders(mergedOrders, true),
-        storage.saveAds(mergedAds, true),
-        storage.saveReferrals(mergedReferrals, true),
-        storage.saveCompensations(mergedCompensations, true),
-      ]);
+      await storage.saveDataset({ orders: mergedOrders, ads: mergedAds, referrals: mergedReferrals, compensations: mergedCompensations });
       setOrders(mergedOrders);
       setAds(mergedAds);
       setReferrals(mergedReferrals);
@@ -328,11 +314,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const backupData = useCallback(async () => {
     const data = await storage.exportAllData();
-    return JSON.stringify(data, null, 2);
+    return JSON.stringify({ ...data, version: 1, exportedAt: new Date().toISOString() }, null, 2);
   }, []);
 
   const restoreData = useCallback(async (json: string) => {
-    const data = JSON.parse(json);
+    const data = parseBackup(json);
     await storage.restoreAllData(data);
     setOrders(data.orders || []);
     setAds(data.ads || []);
@@ -366,7 +352,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       effectiveRTOSettings,
       effectiveReturnSettings,
       returnOverrides,
-      ads,
+      usableAds(ads),
       userSettings.adAllocationMethod,
     );
   }, [
@@ -444,7 +430,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const isDateInRange = useCallback(
     (d: Date | null | undefined): boolean => {
-      if (!d) return true;
+      if (!d) return dateRange.start === null && dateRange.end === null;
       const { start, end } = dateRange;
       if (start && d < start) return false;
       if (end && d > end) return false;
@@ -462,9 +448,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const filteredAds = useMemo(() => {
     if (dateRange.start === null && dateRange.end === null) {
-      return ads;
+      return usableAds(ads);
     }
-    return ads.filter((a) => isDateInRange(a.deductionDate));
+    return usableAds(ads).filter((a) => isDateInRange(a.deductionDate));
   }, [ads, dateRange, isDateInRange]);
 
   const filteredReferrals = useMemo(() => {

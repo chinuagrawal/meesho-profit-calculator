@@ -3,7 +3,6 @@ import { FileText, IndianRupee, Calendar } from "lucide-react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
   Badge,

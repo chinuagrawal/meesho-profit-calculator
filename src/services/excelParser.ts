@@ -1,3 +1,4 @@
+import { normalizeStoredAd } from "@/lib/adIntegrity";
 import * as XLSX from "xlsx";
 import {
   Order,
@@ -6,7 +7,6 @@ import {
   CompensationEntry,
   ParsedWorkbook,
   ImportSummary,
-  MeeshoFees,
   OrderStatus,
 } from "@/types";
 import { classifyStatus } from "@/calculations";
@@ -32,7 +32,7 @@ function normalize(s: string): string {
   );
 }
 
-function findHeaderRow(sheet: XLSX.WorkSheet): number {
+function findHeaderRow(sheet: XLSX.WorkSheet, keywords = HEADER_KEYWORDS): number {
   const data = XLSX.utils.sheet_to_json<any[]>(sheet, {
     header: 1,
     defval: "",
@@ -45,7 +45,7 @@ function findHeaderRow(sheet: XLSX.WorkSheet): number {
     let score = 0;
     for (const cell of row) {
       const n = normalize(cell);
-      for (const kw of HEADER_KEYWORDS) {
+      for (const kw of keywords) {
         if (normalize(kw) === n) score += 2;
         else if (n.includes(normalize(kw))) score += 1;
       }
@@ -102,6 +102,12 @@ function parseExcelDate(v: any): Date | null {
     if (d) return new Date(d.y, d.m - 1, d.d, d.H, d.M, d.S);
   }
   if (typeof v === "string") {
+    const local = v.trim().match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (local) {
+      const [, day, month, year] = local.map(Number);
+      const d = new Date(year, month - 1, day);
+      return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day ? d : null;
+    }
     const d = new Date(v);
     if (!isNaN(d.getTime())) return d;
   }
@@ -142,6 +148,7 @@ export function parseOrderPaymentsSheet(
     );
   }
 
+  if (missingRequired.length > 0) return orders;
   const now = new Date().toISOString();
   for (let r = headerRowIdx + 1; r < raw.length; r++) {
     const row = raw[r];
@@ -171,6 +178,11 @@ export function parseOrderPaymentsSheet(
     ]);
 
     if (!supplierSKU && !subOrderNo) continue;
+    const parsedQuantity = parseNumeric(quantityVal);
+    if (!supplierSKU || !subOrderNo || parsedQuantity === null || !Number.isInteger(parsedQuantity) || parsedQuantity <= 0 || parseNumeric(finalSettlementVal) === null) {
+      warnings.push(`Row ${r + 1} rejected: order number, SKU, positive whole quantity and settlement are required.`);
+      continue;
+    }
 
     const rawStatus =
       getVal(row, colMap, ["live order status", "order status", "status"]) ??
@@ -242,11 +254,11 @@ export function parseOrderPaymentsSheet(
 
     const order: Order = {
       id: id,
-      subOrderNo: subOrderNo ? String(subOrderNo) : "",
+      subOrderNo: subOrderNo ? String(subOrderNo).trim() : "",
       orderDate: parseExcelDate(orderDateVal),
       dispatchDate: parseExcelDate(dispatchDateVal),
       productName: productName ? String(productName) : "",
-      supplierSKU: supplierSKU ? String(supplierSKU) : "",
+      supplierSKU: supplierSKU ? String(supplierSKU).trim() : "",
       catalogID: catalogID ? String(catalogID) : undefined,
       orderSource: orderSource ? String(orderSource) : undefined,
       liveOrderStatus: orderStatus,
@@ -257,6 +269,7 @@ export function parseOrderPaymentsSheet(
       totalSaleReturnAmount: parseNumeric(totalSaleReturnAmount),
       finalSettlementAmount: parseNumeric(finalSettlementVal),
       productGSTPercent: parseNumeric(productGSTPercent),
+      actualGSTAmount: parseNumeric(getVal(row, colMap, ["actual gst amount", "output gst", "gst amount in settlement"])),
       meeshoFees: {
         meeshoCommission: parseNumeric(meeshoCommission),
         fixedFee: parseNumeric(fixedFee),
@@ -289,15 +302,19 @@ export function parseAdsSheet(
   const raw = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: "" });
   if (raw.length === 0) return entries;
 
-  let headerRowIdx = findHeaderRow(sheet);
+  const headerRowIdx = findHeaderRow(sheet, ["deduction date", "deduction duration", "campaign id", "ad cost", "total ads cost"]);
   if (headerRowIdx < 0) {
-    headerRowIdx = 0;
-    warnings.push("Ads Cost sheet: header not detected precisely, using row 1");
+    warnings.push("Ads Cost sheet: no advertising header found; no advertising rows imported.");
+    return entries;
   }
   const headers = (raw[headerRowIdx] || []).map((h: any) =>
     h == null ? "" : String(h),
   );
   const colMap = buildColumnMap(headers);
+  if (!["adcost", "adscost", "totaladscost"].some(key => colMap.has(key))) {
+    warnings.push("Ads Cost sheet: missing cost columns; no advertising rows imported.");
+    return entries;
+  }
   const now = new Date().toISOString();
 
   for (let r = headerRowIdx + 1; r < raw.length; r++) {
@@ -310,10 +327,11 @@ export function parseAdsSheet(
 
     const deductionDuration = getVal(row, colMap, [
       "deduction duration",
+      "deduction period",
       "duration",
       "period",
     ]);
-    const deductionDateVal = getVal(row, colMap, ["deduction date", "date"]);
+    const deductionDateVal = getVal(row, colMap, ["deduction date", "transaction date", "date"]);
     const campaignID = getVal(row, colMap, ["campaign id", "campaign"]);
     const adCost = getVal(row, colMap, ["ad cost", "ads cost", "cost"]);
     const credits = getVal(row, colMap, ["credits"]);
@@ -332,7 +350,12 @@ export function parseAdsSheet(
       if (h) rawFields[String(h)] = row[i];
     });
 
-    entries.push({
+    if (parseNumeric(totalAdsCost) === null && parseNumeric(adCost) === null && parseNumeric(adCostNet) === null) continue;
+    if (row.some((cell: unknown) => typeof cell === "string" && /^(?:grand\s+total|sub\s*total|total)(?:\s*:)?$/i.test(cell.trim()))) {
+      warnings.push(`Ads row ${r + 1}: summary total excluded to avoid double-counting.`);
+      continue;
+    }
+    entries.push(normalizeStoredAd({
       id: `ad-${r}-${now}`,
       deductionDuration: deductionDuration
         ? String(deductionDuration)
@@ -348,7 +371,7 @@ export function parseAdsSheet(
       totalAdsCost: parseNumeric(totalAdsCost),
       rawFields,
       importedAt: now,
-    });
+    }));
   }
 
   return entries;

@@ -1,3 +1,5 @@
+import { isMalformedAd } from "@/lib/adIntegrity";
+import { getAdMonthKey } from "@/lib/adDates";
 import { useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
@@ -30,7 +32,6 @@ import {
   formatINR,
   formatPercent,
   formatNumber,
-  formatDate,
   getMonthKey,
   formatMonthYear,
 } from "@/lib/utils";
@@ -118,7 +119,6 @@ function MonthRow({
   label,
   values,
   format,
-  isMoney = false,
   isPercent = false,
   toneByValue = false,
 }: {
@@ -130,10 +130,9 @@ function MonthRow({
   toneByValue?: boolean;
 }) {
   const n = values.length;
-  const changeVal =
-    n >= 2 && values[n - 2] !== 0
-      ? ((values[n - 1] - values[n - 2]) / Math.abs(values[n - 2])) * 100
-      : null;
+  const changeVal = n < 2 ? null : isPercent
+    ? values[n - 1] - values[n - 2]
+    : values[n - 2] !== 0 ? ((values[n - 1] - values[n - 2]) / Math.abs(values[n - 2])) * 100 : null;
   const tone = (v: number) =>
     toneByValue
       ? v > 0
@@ -166,7 +165,7 @@ function MonthRow({
               }
             >
               {changeVal >= 0 ? "▲" : "▼"} {Math.abs(changeVal).toFixed(1)}
-              {!isMoney && !isPercent ? "%" : isPercent ? " pts" : ""}
+              {isPercent ? " pts" : "%"}
             </span>
           )}
         </td>
@@ -179,6 +178,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const {
     enrichedOrders,
+    ads,
     filteredEnrichedOrders,
     filteredAds,
     filteredReferrals,
@@ -218,21 +218,14 @@ export default function DashboardPage() {
       (s, a) => s + (a.totalAdsCost ?? a.adCost ?? 0),
       0,
     );
-    const netProfit = filteredEnrichedOrders.reduce(
-      (s, o) => s + (o.netProfit ?? 0),
-      0,
-    );
+    const netProfit = grossCashProfit - adSpend;
     const settlementForMargin = nonCancelled.reduce(
       (s, o) => s + (o.finalSettlementAmount ?? 0),
       0,
     );
-    const profitForMargin = nonCancelled.reduce(
-      (s, o) => s + (o.basicCashProfit ?? 0),
-      0,
-    );
     const profitMargin =
       settlementForMargin > 0
-        ? (profitForMargin / settlementForMargin) * 100
+        ? (netProfit / settlementForMargin) * 100
         : null;
 
     const returns = filteredEnrichedOrders.filter(
@@ -334,6 +327,10 @@ export default function DashboardPage() {
     () => aggregateBySKU(filteredEnrichedOrders),
     [filteredEnrichedOrders],
   );
+  const malformedAds = ads.filter(isMalformedAd);
+  const undatedAds = ads.filter(ad => !isMalformedAd(ad) && getAdMonthKey(ad) === "unknown");
+  const undatedAdSpend = undatedAds.reduce((total, ad) => total + (ad.totalAdsCost ?? ad.adCost ?? 0), 0);
+  const undatedOrders = filteredEnrichedOrders.filter(order => getMonthKey(order.orderDate) === "unknown").length;
   const monthlyAggs: MonthlyAggregate[] = useMemo(
     () => aggregateByMonth(filteredEnrichedOrders, filteredAds),
     [filteredEnrichedOrders, filteredAds],
@@ -392,12 +389,11 @@ export default function DashboardPage() {
   const adSpendByDate = useMemo(() => {
     const m = new Map<string, number>();
     for (const ad of filteredAds) {
-      if (!ad.deductionDate) continue;
-      const key = getMonthKey(ad.deductionDate);
-      const label = formatMonthYear(ad.deductionDate);
+      const key = getAdMonthKey(ad);
+      if (key === "unknown") continue;
+      const label = formatMonthYear(new Date(`${key}-01T00:00:00`));
       const cost = ad.totalAdsCost ?? ad.adCost ?? 0;
       m.set(label, (m.get(label) ?? 0) + cost);
-      void key;
     }
     return Array.from(m.entries()).map(([month, spend]) => ({ month, spend }));
   }, [filteredAds]);
@@ -515,6 +511,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
+      <section className="rounded-xl border bg-white p-4 space-y-3" aria-label="Data quality and actions">
+        <p className="text-sm font-medium">{filteredEnrichedOrders.filter(o => o.netProfit !== null).length} of {filteredEnrichedOrders.length} orders have calculable profit. {filteredEnrichedOrders.some(o => o.netProfit === null) ? "Profit totals are partial; fix missing data before relying on them." : "All orders have calculable profit."}</p>
+        <div className="flex flex-wrap gap-3 text-sm">
+          <Link className="underline text-amber-800" to="/orders?filter=missing">Fix missing costs</Link>
+          <Link className="underline text-red-700" to="/sku-analysis?filter=loss">Review loss-making SKUs</Link>
+          <Link className="underline text-blue-700" to="/orders?filter=returns-review">Review returns without a condition</Link>
+        </div>
+        <p className="text-xs text-slate-500">Business profit deducts actual advertising spend for the selected period. Order and SKU profit deduct attributed ads; unallocated ads remain a business expense. Monthly profit excludes separate referral and compensation payments.</p>
+      </section>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -631,14 +636,14 @@ export default function DashboardPage() {
           tone="muted"
         />
         <Kpi
-          title="Total Ad Cost"
+          title={malformedAds.length ? "Ad Cost (Reimport Required)" : "Total Ad Cost"}
           value={formatINR(totals.adSpend)}
           icon={Megaphone}
           tone="warn"
           subtitle={`${filteredAds.length} ad entries`}
         />
         <Kpi
-          title="Net Cash Profit"
+          title={malformedAds.length ? "Net Cash Profit (Incomplete)" : "Net Cash Profit"}
           value={formatINR(totals.netProfit + referralTotal + netCompRec)}
           icon={
             totals.netProfit + referralTotal + netCompRec >= 0
@@ -831,13 +836,21 @@ export default function DashboardPage() {
           <div className="p-4 rounded-lg bg-blue-50 border border-blue-100">
             <div className="font-semibold text-blue-800 mb-1">Net Profit</div>
             <div className="text-blue-700/90 font-mono text-xs">
-              Basic Cash Profit − Estimated Ad Cost + Referrals + (Compensation
+              Basic Cash Profit − Actual Ad Spend + Referrals + (Compensation
               − Recovery)
             </div>
           </div>
         </CardContent>
       </Card>
 
+      {malformedAds.length > 0 && <Alert variant="warning"><strong>Advertising import needs repair.</strong> {malformedAds.length} malformed rows from an older import are excluded from expenses. Ad spend and net profit are incomplete until you <Link className="underline" to="/import">reimport both original reports</Link>. Use merge mode to preserve your orders and SKU costs.</Alert>}
+      {(undatedAds.length > 0 || undatedOrders > 0) && (
+        <Alert variant="warning" className="space-y-2">
+          {undatedAds.length > 0 && <div><strong>Undated ad spend: {formatINR(undatedAdSpend)}</strong> across {undatedAds.length} entries. The report has no usable deduction date or single-month period for these entries. This expense is included in all-time business profit, but excluded from monthly comparisons, charts and date-filtered totals. Reimport a report with deduction dates to place it in the correct month.</div>}
+          {undatedOrders > 0 && <div>{undatedOrders} orders have no usable date and are excluded from monthly comparisons.</div>}
+          <Link className="underline font-medium" to="/advertising">Review advertising entries</Link>
+        </Alert>
+      )}
       {monthlyAggs.length >= 1 && (
         <Card>
           <CardHeader>

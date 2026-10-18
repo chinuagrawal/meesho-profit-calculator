@@ -1,16 +1,17 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
-import DashboardPage from "@/pages/DashboardPage";
-import OrdersPage from "@/pages/OrdersPage";
-import SKUAnalysisPage from "@/pages/SKUAnalysisPage";
-import SKUCostsPage from "@/pages/SKUCostsPage";
-import AdvertisingPage from "@/pages/AdvertisingPage";
-import GSTPage from "@/pages/GSTPage";
-import ReferralPage from "@/pages/ReferralPage";
-import CompensationPage from "@/pages/CompensationPage";
-import BreakEvenPage from "@/pages/BreakEvenPage";
-import ImportPage from "@/pages/ImportPage";
-import SettingsPage from "@/pages/SettingsPage";
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const OrdersPage = lazy(() => import("@/pages/OrdersPage"));
+const SKUAnalysisPage = lazy(() => import("@/pages/SKUAnalysisPage"));
+const SKUCostsPage = lazy(() => import("@/pages/SKUCostsPage"));
+const AdvertisingPage = lazy(() => import("@/pages/AdvertisingPage"));
+const GSTPage = lazy(() => import("@/pages/GSTPage"));
+const ReferralPage = lazy(() => import("@/pages/ReferralPage"));
+const CompensationPage = lazy(() => import("@/pages/CompensationPage"));
+const BreakEvenPage = lazy(() => import("@/pages/BreakEvenPage"));
+const ImportPage = lazy(() => import("@/pages/ImportPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 import { useApp } from "@/context/AppContext";
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
   }
 
   return (
+    <Suspense fallback={<div className="p-6" role="status">Loading page...</div>}>
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<DashboardPage />} />
@@ -46,5 +48,6 @@ export default function App() {
         <Route path="*" element={<DashboardPage />} />
       </Route>
     </Routes>
+    </Suspense>
   );
 }

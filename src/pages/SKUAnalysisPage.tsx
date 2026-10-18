@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   BarChart3,
   TrendingUp,
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui";
 import { useApp } from "@/context/AppContext";
 import { aggregateBySKU } from "@/calculations";
-import { formatINR, formatPercent, formatNumber } from "@/lib/utils";
+import { formatINR, formatPercent } from "@/lib/utils";
 import { SKUAggregate } from "@/types";
 import { cn, normalizeSKU } from "@/lib/utils";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
@@ -42,6 +42,8 @@ type SortKey =
 
 export default function SKUAnalysisPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const lossOnly = params.get("filter") === "loss";
   const { enrichedOrders, filteredEnrichedOrders, dateFilterType } = useApp();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("profit-desc");
@@ -55,6 +57,7 @@ export default function SKUAnalysisPage() {
 
   const filtered = useMemo(() => {
     let list = skuAggs;
+    if (lossOnly) list = list.filter(s => s.profit !== null && s.profit < 0);
     if (missingOnly) list = list.filter((s) => s.hasMissingCost);
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -109,7 +112,7 @@ export default function SKUAnalysisPage() {
         break;
     }
     return copy;
-  }, [skuAggs, search, sort, missingOnly]);
+  }, [skuAggs, search, sort, missingOnly, lossOnly]);
 
   const ordersForSKU = useMemo(() => {
     if (!selectedSKU) return [];
@@ -143,7 +146,7 @@ export default function SKUAnalysisPage() {
                 </span>
               </>
             )}{" "}
-            · Click a row to drill down into its orders.
+            · Profit is after attributed advertising. {lossOnly && <span>Showing loss-making SKUs. <button className="underline" onClick={() => navigate("/sku-analysis")}>Show all</button></span>} Click a row to drill down into its orders.
           </p>
         </div>
         <div className="flex items-center gap-2">

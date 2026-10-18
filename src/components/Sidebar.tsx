@@ -72,6 +72,7 @@ export function Sidebar({
           </div>
           <button
             className="lg:hidden p-1.5 rounded hover:bg-sidebar-accent"
+            aria-label="Close navigation"
             onClick={onClose}
           >
             <X className="w-5 h-5" />

@@ -74,7 +74,7 @@ export const DEFAULT_GST_SETTINGS: GSTSettings = {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   currency: "INR",
-  adAllocationMethod: "none",
+  adAllocationMethod: "equal",
   defaultProfitView: "cash",
   decimalPlaces: 2,
   rto: {
@@ -275,18 +275,33 @@ export const storage = {
     };
   },
 
+  async saveDataset(data: Pick<AppData, "orders" | "ads" | "referrals" | "compensations">): Promise<void> {
+    const db = await getDB();
+    const tx = db.transaction(["orders", "ads", "referrals", "compensations"], "readwrite");
+    for (const key of ["orders", "ads", "referrals", "compensations"] as const) {
+      const store = tx.objectStore(key);
+      await store.clear();
+      for (const entry of data[key]) await store.put(entry);
+    }
+    await tx.done;
+  },
+
   async restoreAllData(data: AppData): Promise<void> {
-    await Promise.all([
-      this.saveOrders(data.orders || [], true),
-      this.saveAds(data.ads || [], true),
-      this.saveReferrals(data.referrals || [], true),
-      this.saveCompensations(data.compensations || [], true),
-    ]);
-    if (data.skuCosts) this.saveSKUCosts(data.skuCosts);
-    if (data.gstSettings) this.saveGSTSettings(data.gstSettings);
-    if (data.userSettings) this.saveUserSettings(data.userSettings);
-    if (data.returnOverrides) {
-      localStorage.setItem(LS_RETURN_OVERRIDES, JSON.stringify(data.returnOverrides));
+    const keys = [LS_SKU_COSTS, LS_GST_SETTINGS, LS_USER_SETTINGS, LS_RETURN_OVERRIDES];
+    const previous = keys.map(key => localStorage.getItem(key));
+    try {
+      this.saveSKUCosts(data.skuCosts);
+      this.saveGSTSettings(data.gstSettings);
+      this.saveUserSettings(data.userSettings);
+      localStorage.setItem(LS_RETURN_OVERRIDES, JSON.stringify(data.returnOverrides ?? {}));
+      await this.saveDataset(data);
+    } catch (error) {
+      keys.forEach((key, index) => {
+        const value = previous[index];
+        if (value === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+      });
+      throw error;
     }
   },
 

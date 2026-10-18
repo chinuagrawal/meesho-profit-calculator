@@ -103,11 +103,14 @@ export function getMonthKey(date: Date | string | null | undefined): string {
 
 export function parseNumeric(value: any): number | null {
   if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number") return isNaN(value) ? null : value;
+  if (typeof value === "number") return !Number.isFinite(value) ? null : value;
   if (typeof value === "string") {
-    const cleaned = value.replace(/[^\d.\-]/g, "");
-    const num = parseFloat(cleaned);
-    return isNaN(num) ? null : num;
+    const trimmed = value.trim();
+    const accounting = /^\(.*\)$/.test(trimmed);
+    const cleaned = trimmed.replace(/(?:INR|Rs\.?|₹|[,$\s])/gi, "").replace(accounting ? /^\(|\)$/g : /$^/g, "");
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(cleaned)) return null;
+    const num = Number(cleaned) * (accounting ? -1 : 1);
+    return !Number.isFinite(num) ? null : num;
   }
   return null;
 }

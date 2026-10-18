@@ -6,7 +6,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Button,
   Label,
   Select,
   Checkbox,
@@ -24,7 +23,6 @@ export default function GSTPage() {
   const {
     gstSettings,
     setGSTSettings,
-    enrichedOrders,
     filteredEnrichedOrders,
     dateFilterType,
   } = useApp();

@@ -1,3 +1,4 @@
+import { reviewOrders } from "@/services/dataIntegrity";
 import { useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -63,6 +64,13 @@ export default function ImportPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const hasExisting = orders.length > 0;
+  const review = parsed ? reviewOrders(overwrite ? [] : orders, parsed.orders) : null;
+  const downloadIssues = () => {
+    if (!parsed) return;
+    const blob = new Blob([[...parsed.summary.errors, ...parsed.summary.warnings].join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url; link.download = "import-issues.txt"; link.click(); URL.revokeObjectURL(url);
+  };
 
   const processFile = useCallback(async (f: File) => {
     setError(null);
@@ -245,6 +253,12 @@ export default function ImportPage() {
                 ))}
               </div>
               <div className="h-4" />
+              {review && <>
+                <SummaryItem label="New orders" value={review.added} tone="good" />
+                <SummaryItem label="Updated orders" value={review.updated} />
+                <SummaryItem label="Unchanged duplicates" value={review.duplicates} />
+                <SummaryItem label="Rejected rows" value={summary.warnings.filter(w => w.includes("rejected:")).length} tone="warn" />
+              </>}
               <SummaryItem label="Orders found" value={summary.ordersFound} />
               <SummaryItem
                 label="Valid orders"
@@ -346,12 +360,14 @@ export default function ImportPage() {
                   </div>
                   <div className="text-xs text-amber-700 mt-0.5">
                     You have {orders.length} existing orders. If unchecked, new
-                    orders will be merged (duplicates by Sub Order No skipped).
+                    orders will be merged, changed orders updated, and unchanged duplicates skipped. Additional payments are deduplicated by their contents.
                   </div>
                 </div>
               </label>
             )}
-            <div className="flex gap-3 justify-end">
+            <p className="text-xs text-slate-600">Only valid rows are imported. Review changes above before continuing.</p>
+            <div className="flex flex-wrap gap-3 justify-end">
+              <Button variant="outline" onClick={downloadIssues}>Download issue details</Button>
               <Button
                 variant="outline"
                 onClick={() => {
@@ -366,7 +382,7 @@ export default function ImportPage() {
               <Button
                 variant="primary"
                 onClick={doImport}
-                disabled={importing || summary.errors.length > 0 && summary.validOrders === 0}
+                disabled={importing || summary.errors.length > 0 || summary.validOrders === 0}
               >
                 {importing ? "Importing..." : "Import Data"}
               </Button>

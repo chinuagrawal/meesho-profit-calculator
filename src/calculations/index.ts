@@ -1,3 +1,4 @@
+import { getAdMonthKey } from "@/lib/adDates";
 import {
   Order,
   OrderWithCalculations,
@@ -15,8 +16,6 @@ import {
   PerOrderReturnCondition,
 } from "@/types";
 import {
-  parseNumeric,
-  safeDivide,
   getMonthKey,
   formatMonthYear,
   normalizeSKU,
@@ -235,6 +234,9 @@ export function calculateOrderProfit(
   }
 
   if (status === "Cancelled") {
+    totalPurchaseCostInclGST = 0;
+    totalPurchaseCostExclGST = 0;
+    totalInputGST = 0;
     if (settlement !== null && settlement > 0) {
       warnings.push("Cancelled order has settlement amount — review required");
     }
@@ -294,7 +296,7 @@ export function calculateOrderProfit(
 
   if (settlement === null) {
     calculationStatus = "NO_SETTLEMENT";
-  } else if (hasMissingCost && status !== "Cancelled" && status !== "RTO") {
+  } else if (hasMissingCost && totalPurchaseCostInclGST === null && status !== "Cancelled" && status !== "RTO") {
     calculationStatus = "COST_MISSING";
   } else if (status === "Cancelled") {
     if (settlement !== null && settlement > 0) {
@@ -367,15 +369,17 @@ export function calculateAdAllocation(
     validOrders.forEach((o) => result.set(o.id, perOrder));
   } else if (method === "byOrderValue") {
     const totalSettlement = validOrders.reduce(
-      (sum, o) => sum + (o.finalSettlementAmount ?? 0),
+      (sum, o) => sum + Math.max(0, o.finalSettlementAmount ?? 0),
       0,
     );
     if (totalSettlement > 0) {
       validOrders.forEach((o) => {
         const share =
-          ((o.finalSettlementAmount ?? 0) / totalSettlement) * totalAdCost;
+          (Math.max(0, o.finalSettlementAmount ?? 0) / totalSettlement) * totalAdCost;
         result.set(o.id, share);
       });
+    } else {
+      validOrders.forEach(o => result.set(o.id, totalAdCost / validOrders.length));
     }
   } else if (method === "byQuantity") {
     const totalQty = validOrders.reduce((sum, o) => sum + (o.quantity ?? 0), 0);
@@ -399,10 +403,8 @@ export function enrichOrderWithCalculations(
   returnOverrideMap: Map<string, PerOrderReturnCondition>,
   adAllocationMap: Map<string, number>,
 ): OrderWithCalculations {
-  const skuCost = skuCostMap.get(order.supplierSKU);
+  const skuCost = skuCostMap.get(normalizeSKU(order.supplierSKU));
   const purchaseCostPerUnit = skuCost?.purchaseCostInclGST ?? null;
-  const hasMissingCost =
-    purchaseCostPerUnit === null || purchaseCostPerUnit === undefined;
 
   const gstRate =
     skuCost?.gstRate ?? order.productGSTPercent ?? gstSettings.purchaseGSTRate;
@@ -423,15 +425,8 @@ export function enrichOrderWithCalculations(
     adAlloc,
   );
 
-  const totalInputGST =
-    perUnit.inputGST !== null && !isNaN(order.quantity ?? 0)
-      ? (order.quantity ?? 1) * perUnit.inputGST
-      : null;
-
-  const taxableCOGS =
-    perUnit.taxableCost !== null && !isNaN(order.quantity ?? 0)
-      ? (order.quantity ?? 1) * perUnit.taxableCost
-      : null;
+  const totalInputGST = result.inputGST;
+  const taxableCOGS = result.purchaseCostExclGST;
 
   const estimatedAccountingProfit = result.gstAdjustedProfit ?? null;
   const profitPercent = calculateProfitPercent(
@@ -454,7 +449,7 @@ export function enrichOrderWithCalculations(
     netProfit: result.netCashProfit,
     profitPercent,
     marginPercent: result.margin,
-    hasMissingCost,
+    hasMissingCost: result.purchaseCostInclGST === null,
     rowStatus: result.calculationStatus,
     warnings: result.warnings,
     outputGST: result.outputGST,
@@ -475,11 +470,17 @@ export function enrichAllOrders(
   adsEntries: AdsCostEntry[],
   adMethod: AdAllocationMethod,
 ): OrderWithCalculations[] {
-  const skuCostMap = new Map(skuCosts.map((s) => [s.supplierSKU, s]));
+  const skuCostMap = new Map(skuCosts.map((s) => [normalizeSKU(s.supplierSKU), s]));
   const returnOverrideMap = new Map(
     Object.entries(returnOverrides) as [string, PerOrderReturnCondition][],
   );
-  const adAllocMap = calculateAdAllocation(orders, adsEntries, adMethod);
+  const adAllocMap = new Map<string, number>();
+  const months = new Set(adsEntries.map(getAdMonthKey));
+  for (const month of months) {
+    if (month === "unknown") continue;
+    const allocation = calculateAdAllocation(orders.filter(o => getMonthKey(o.orderDate) === month), adsEntries.filter(a => getAdMonthKey(a) === month), adMethod);
+    allocation.forEach((value, key) => adAllocMap.set(key, value));
+  }
   return orders.map((o) =>
     enrichOrderWithCalculations(
       o,
@@ -541,8 +542,8 @@ export function aggregateBySKU(
     if (order.totalInputGST !== null) agg.inputGST! += order.totalInputGST;
     if (order.estimatedAdAllocation !== null)
       agg.adCost! += order.estimatedAdAllocation;
-    if (order.basicCashProfit !== null) {
-      agg.profit! += order.basicCashProfit;
+    if (order.netProfit !== null) {
+      agg.profit! += order.netProfit;
     } else {
       agg.hasMissingCost = true;
     }
@@ -583,6 +584,7 @@ export function aggregateByMonth(
 
   for (const order of enrichedOrders) {
     const mk = getMonthKey(order.orderDate);
+    if (mk === "unknown") continue;
     if (!map.has(mk)) {
       map.set(mk, {
         monthKey: mk,
@@ -619,13 +621,18 @@ export function aggregateByMonth(
 
   const adsByMonth = new Map<string, number>();
   for (const ad of adsEntries) {
-    const mk = getMonthKey(ad.deductionDate);
+    const mk = getAdMonthKey(ad);
+    if (mk === "unknown") continue;
     const cost = ad.totalAdsCost ?? ad.adCost ?? 0;
     adsByMonth.set(mk, (adsByMonth.get(mk) ?? 0) + cost);
   }
 
+  for (const mk of adsByMonth.keys()) {
+    if (!map.has(mk)) map.set(mk, { monthKey: mk, monthLabel: formatMonthYear(new Date(`${mk}-01T00:00:00`)), orders: 0, units: 0, sales: 0, settlement: 0, purchaseCost: 0, cogs: 0, adSpend: 0, profit: 0, margin: null, returns: 0, rto: 0, cancellations: 0 });
+  }
   for (const [mk, agg] of map.entries()) {
     agg.adSpend = adsByMonth.get(mk) ?? 0;
+    agg.profit = (agg.profit ?? 0) - agg.adSpend;
     agg.margin = calculateMarginPercent(agg.profit ?? null, agg.settlement);
     if (agg.purchaseCost === 0) agg.purchaseCost = null;
     if (agg.cogs === 0) agg.cogs = null;
@@ -641,8 +648,8 @@ export function classifyStatus(rawStatus: string): OrderStatus {
   if (!rawStatus) return "Other";
   const s = rawStatus.toString().toLowerCase().trim();
   if (s.includes("cancel")) return "Cancelled";
+  if (s.includes("rto") || /return[\s_-]*to[\s_-]*origin/.test(s)) return "RTO";
   if (s.includes("return")) return "Returned";
-  if (s.includes("rto")) return "RTO";
   if (s.includes("deliver")) return "Delivered";
   if (s.includes("ship") || s.includes("dispatch")) return "Shipped";
   if (s.includes("pending")) return "Pending";

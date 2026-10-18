@@ -34,7 +34,6 @@ import {
 import {
   formatDate,
   formatINR,
-  formatPercent,
   formatNumber,
   calculationStatusLabel,
   calculationStatusBadgeVariant,
@@ -68,7 +67,7 @@ const ORDER_STATUSES: { value: OrderStatus | "all"; label: string }[] = [
 ];
 
 export default function OrdersPage() {
-  const { enrichedOrders, filteredEnrichedOrders, skuCosts, dateFilterType } =
+  const { enrichedOrders, filteredEnrichedOrders, skuCosts, dateFilterType, returnOverrides } =
     useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -94,7 +93,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (skuParam) setSearch(skuParam);
-    if (filterParam === "missing") setMissingOnly(true);
+    setMissingOnly(filterParam === "missing");
     if (filterParam === "rto") setRtoOnly(true);
     if (filterParam === "cancelled") setCancelledOnly(true);
     if (filterParam === "negative") setNegativeSettlementOnly(true);
@@ -103,6 +102,7 @@ export default function OrdersPage() {
 
   const filtered = useMemo(() => {
     let list = filteredEnrichedOrders;
+    if (filterParam === "returns-review") list = list.filter(o => o.liveOrderStatus === "Returned" && !returnOverrides[o.subOrderNo]);
 
     if (skuParam) {
       list = list.filter(
@@ -161,7 +161,7 @@ export default function OrdersPage() {
           (o.productName || "").toLowerCase().includes(q),
       );
     }
-    return list.sort((a, b) => {
+    return list.slice().sort((a, b) => {
       const da = a.orderDate?.getTime() ?? 0;
       const db = b.orderDate?.getTime() ?? 0;
       return db - da;
@@ -174,6 +174,8 @@ export default function OrdersPage() {
     rtoOnly,
     cancelledOnly,
     negativeSettlementOnly,
+    filterParam,
+    returnOverrides,
     profitLossFilter,
     dateFrom,
     dateTo,

@@ -16,7 +16,6 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
   Button,
@@ -50,16 +49,6 @@ export default function SKUCostsPage() {
   const [newName, setNewName] = useState("");
   const [newCost, setNewCost] = useState("");
   const [newGST, setNewGST] = useState(String(gstSettings.purchaseGSTRate));
-  const importInputRef = useMemo(() => {
-    if (typeof document !== "undefined") {
-      const el = document.createElement("input");
-      el.type = "file";
-      el.accept = ".xlsx,.xls,.csv";
-      return el;
-    }
-    return null as any;
-  }, []);
-
   useEffect(() => {
     if (filter) setSearchParams({ filter });
   }, [filter, setSearchParams]);

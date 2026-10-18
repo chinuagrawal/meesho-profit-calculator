@@ -1,3 +1,7 @@
+import { isMalformedAd } from "@/lib/adIntegrity";
+import { Link } from "react-router-dom";
+import type { AdsCostEntry } from "@/types";
+import { getAdMonthKey } from "@/lib/adDates";
 import { useMemo } from "react";
 import { Megaphone, TrendingUp, Calendar, Tag } from "lucide-react";
 import {
@@ -7,12 +11,12 @@ import {
   CardHeader,
   CardTitle,
   Badge,
+  Alert,
 } from "@/components/ui";
 import { useApp } from "@/context/AppContext";
 import {
   formatDate,
   formatINR,
-  getMonthKey,
   formatMonthYear,
 } from "@/lib/utils";
 import {
@@ -87,24 +91,12 @@ export default function AdvertisingPage() {
     };
   }, [filteredAds]);
 
-  const byDate = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const ad of filteredAds) {
-      if (!ad.deductionDate) continue;
-      const key = formatDate(ad.deductionDate);
-      m.set(key, (m.get(key) ?? 0) + (ad.totalAdsCost ?? ad.adCost ?? 0));
-    }
-    return Array.from(m.entries())
-      .map(([date, spend]) => ({ date, spend }))
-      .slice(-30);
-  }, [filteredAds]);
-
   const byMonth = useMemo(() => {
     const m = new Map<string, { label: string; spend: number }>();
     for (const ad of filteredAds) {
-      if (!ad.deductionDate) continue;
-      const mk = getMonthKey(ad.deductionDate);
-      const label = formatMonthYear(ad.deductionDate);
+      const mk = getAdMonthKey(ad);
+      if (mk === "unknown") continue;
+      const label = formatMonthYear(new Date(`${mk}-01T00:00:00`));
       const prev = m.get(mk)?.spend ?? 0;
       m.set(mk, {
         label,
@@ -134,7 +126,7 @@ export default function AdvertisingPage() {
     {
       value: "none",
       label: "Do not include Ads",
-      desc: "Net Profit = Basic Profit (ads shown separately only)",
+      desc: "Order and SKU profit exclude allocated ads; business profit still deducts actual advertising spend.",
     },
     {
       value: "equal",
@@ -170,6 +162,7 @@ export default function AdvertisingPage() {
         </p>
       </div>
 
+      {ads.some(isMalformedAd) && <Alert variant="warning">Malformed advertising rows from an older import are excluded. <Link className="underline" to="/import">Reimport both source reports in merge mode</Link> to restore the actual expenses. Orders and SKU costs are preserved.</Alert>}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KPI
           title="Total Ad Spend (Net)"
@@ -365,7 +358,7 @@ export default function AdvertisingPage() {
                 filteredAds.slice(0, 500).map((a) => (
                   <tr key={a.id} className="hover:bg-slate-50/70">
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {formatDate(a.deductionDate)}
+                      {getMonthKeyForDisplay(a)}
                     </td>
                     <td className="px-3 py-2 text-slate-600 text-xs">
                       {a.deductionDuration || "—"}
@@ -450,4 +443,10 @@ function EmptyChart() {
       No ad data yet
     </div>
   );
+}
+
+function getMonthKeyForDisplay(ad: AdsCostEntry): string {
+  if (ad.deductionDate && !isNaN(new Date(ad.deductionDate).getTime())) return formatDate(ad.deductionDate);
+  const month = getAdMonthKey(ad);
+  return month === "unknown" ? "Undated" : `${formatMonthYear(new Date(`${month}-01T00:00:00`))} (from period)`;
 }
