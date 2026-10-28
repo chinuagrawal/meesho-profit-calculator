@@ -3,7 +3,11 @@ import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } fro
 import { auth } from "@/config/firebase";
 import { authError, normalizePhone } from "@/lib/authHelpers";
 import { storage } from "@/services/storage";
-import { Button, Input } from "@/components/ui";
+import { Link } from "react-router-dom";
+import { ArrowLeft, ArrowRight, CircleAlert, Download, LoaderCircle, Phone, ShieldCheck } from "lucide-react";
+import { MarketingBrand } from "@/components/MarketingBrand";
+import { ProfitPreview } from "@/components/ProfitPreview";
+import "./marketing.css";
 export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -28,7 +32,7 @@ export default function LoginPage() {
       const normalized = normalizePhone(phone);
       if (!captcha.current) throw new Error("Verification is unavailable");
       verifier.current?.clear();
-      verifier.current = new RecaptchaVerifier(auth, captcha.current, { size: "normal" });
+      verifier.current = new RecaptchaVerifier(auth, captcha.current, { size: "invisible" });
       const result = await signInWithPhoneNumber(auth, normalized, verifier.current);
       setConfirmation(result); setSentTo(normalized); setCode(""); setCooldown(60);
     } catch (error) { setError(error instanceof Error && !('code' in error) ? error.message : authError(error)); verifier.current?.clear(); verifier.current = null; }
@@ -47,23 +51,38 @@ export default function LoginPage() {
       const link = document.createElement("a"); link.href = url; link.download = "meesho-previous-browser-backup.json"; link.click(); URL.revokeObjectURL(url);
     } catch { setError("Could not export browser data. Please try again."); }
   };
-  return <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-    <section className="w-full max-w-md bg-white border rounded-2xl p-6 shadow-sm space-y-5">
-      <div><h1 className="text-2xl font-bold">Meesho Profit Calculator</h1><p className="text-sm text-slate-600 mt-2">Sign in with your phone to access your private profit dashboard and save your data to your account.</p></div>
-      {error && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      {!confirmation ? <form onSubmit={send} className="space-y-4">
-        <label className="block text-sm font-medium">Phone number<Input className="mt-1" type="tel" autoComplete="tel" placeholder="+91 98765 43210" required value={phone} onChange={e => setPhone(e.target.value)} disabled={busy} /></label>
-        <p className="text-xs text-slate-500">By requesting a code, you agree to receive a verification SMS. Google processes your phone number for authentication and abuse prevention. SMS charges may apply.</p>
-        <Button type="submit" variant="primary" className="w-full" disabled={busy || cooldown > 0}>{busy ? "Sending code…" : cooldown ? `Try again in ${cooldown}s` : "Send OTP"}</Button>
-      </form> : <form onSubmit={verify} className="space-y-4">
-        <p className="text-sm text-slate-600">Code sent to {sentTo}.</p>
-        <label className="block text-sm font-medium">Verification code<Input className="mt-1" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required disabled={busy} /></label>
-        <Button type="submit" variant="primary" className="w-full" disabled={busy}>{busy ? "Verifying…" : "Verify & sign in"}</Button>
-        <div className="flex justify-between gap-3 text-sm"><button type="button" disabled={busy || cooldown > 0} className="underline disabled:opacity-50" onClick={() => send()}>{cooldown ? `Resend in ${cooldown}s` : "Resend code"}</button><button type="button" disabled={busy} className="underline" onClick={() => { setConfirmation(null); setCode(""); setError(""); }}>Change number</button></div>
-      </form>}
-      <div ref={captcha} className="overflow-x-auto" />
-      <p className="text-xs text-slate-500">Protected by reCAPTCHA. <a className="underline" href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google Privacy Policy</a> and <a className="underline" href="https://policies.google.com/terms" target="_blank" rel="noreferrer">Terms of Service</a> apply.</p>
-      <div className="border-t pt-4 text-xs text-slate-500"><button onClick={downloadOldData} className="underline">Download previous browser data</button><p className="mt-1">Existing local data stays untouched. After signing in, restore this backup in Settings to move it into your account.</p></div>
+  return <main className="auth-page">
+    <aside className="auth-story" aria-label="About your profit dashboard">
+      <MarketingBrand light />
+      <div className="auth-story-copy"><span className="marketing-eyebrow">A CLEARER VIEW OF YOUR BUSINESS.</span><h2>Good decisions<br />start with<br /><em>clear numbers.</em></h2><p>Your orders, costs and actual profit. Together in one place, ready whenever you are.</p></div>
+      <ProfitPreview compact />
+      <div className="auth-story-footer"><ShieldCheck size={19} /><span>Your business is personal.<br />Your dashboard stays in your account.</span></div><span className="auth-story-orbit" aria-hidden="true" />
+    </aside>
+    <section className="auth-main">
+      <div className="auth-mobile-brand"><MarketingBrand /></div>
+      <Link to="/" className="auth-back"><ArrowLeft size={14} /> Back to the good stuff</Link>
+      <div className="auth-form-wrap">
+        <div className="auth-stepper" aria-label={confirmation ? "Step 2 of 2: verify code" : "Step 1 of 2: your number"}><span className={!confirmation ? "is-active" : ""}><i>01</i> YOUR NUMBER</span><span className={confirmation ? "is-active" : ""}><i>02</i> VERIFY CODE</span></div>
+        <h1>{confirmation ? <>Check your phone.<br /><em>You're almost in.</em></> : <>A fresh look at<br /><em>your business.</em></>}</h1>
+        <p className="auth-form-subtitle">{confirmation ? "One little code, and your dashboard is ready." : "Sign in or create your account with a one-time code. No password to remember."}</p>
+        {error && <div role="alert" className="auth-alert"><CircleAlert size={16} /><span>{error}</span></div>}
+        {!confirmation ? <form onSubmit={send}>
+          <div><label htmlFor="auth-phone" className="auth-label">Phone number</label><div className="auth-input-wrap"><Phone size={18} strokeWidth={1.5} /><input id="auth-phone" className="auth-input" type="tel" autoComplete="tel" placeholder="+91 98765 43210" required value={phone} onChange={e => setPhone(e.target.value)} disabled={busy} aria-describedby="auth-phone-hint" /></div><p id="auth-phone-hint" className="auth-input-hint">Include your country code. We'll send a 6-digit SMS code.</p></div>
+          <button type="submit" className="auth-submit" disabled={busy || cooldown > 0}><span>{busy ? "Getting your code ready…" : cooldown ? `Try again in ${cooldown}s` : "Continue with phone"}</span>{busy ? <LoaderCircle size={18} className="auth-spinner" /> : <ArrowRight size={18} />}</button>
+          <p className="auth-consent">By continuing, you agree to receive a verification SMS. Google processes your number for authentication and abuse prevention. SMS charges may apply.</p>
+        </form> : <form onSubmit={verify}>
+          <div className="auth-sent">A verification code is on its way to <strong>{sentTo}</strong>.</div>
+          <div><label htmlFor="auth-code" className="auth-label">Your 6-digit code</label><input id="auth-code" className="auth-input auth-otp" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" placeholder="000000" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required disabled={busy} autoFocus /></div>
+          <button type="submit" className="auth-submit" disabled={busy}><span>{busy ? "Opening your dashboard…" : "Verify & open dashboard"}</span>{busy ? <LoaderCircle size={18} className="auth-spinner" /> : <ArrowRight size={18} />}</button>
+          <div className="auth-code-actions"><button type="button" disabled={busy || cooldown > 0} onClick={() => send()}>{cooldown ? `Resend code in ${cooldown}s` : "Send a new code"}</button><button type="button" disabled={busy} onClick={() => { setConfirmation(null); setCode(""); setError(""); }}>Use a different number</button></div>
+        </form>}
+        <div ref={captcha} className="captcha-slot" />
+        <div className="auth-divider">YOUR ACCOUNT, YOUR NUMBERS</div>
+        <div className="auth-security"><ShieldCheck size={15} strokeWidth={1.5} /> Private account. Saved across devices.</div>
+        <p className="auth-privacy">Protected by reCAPTCHA. Google's <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noreferrer">Terms of Service</a> apply.</p>
+        <div className="auth-legacy"><button type="button" onClick={downloadOldData}><Download size={13} /> Moving from the old calculator? Download your data.</button><p>Your previous browser data stays untouched. Restore the backup in Settings after signing in.</p></div>
+      </div>
+      <p className="auth-credit">A little clarity, built by <a href="https://www.instagram.com/chinmay.agrawal._/" target="_blank" rel="noreferrer">Chinmay Agrawal ↗</a></p>
     </section>
   </main>;
 }
