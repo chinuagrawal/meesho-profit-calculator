@@ -44,7 +44,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   decimalPlaces: 2,
   rto: {
     rtoShippingCost: 0,
-    chargeProductCostOnRTO: true,
+    chargeProductCostOnRTO: false,
   },
   returnOrder: {
     returnProductCondition: "usable",

@@ -362,7 +362,7 @@ export default function SettingsPage() {
               <ToggleRow
                 label="Charge Product Cost on RTO"
                 desc="If ON, RTO Profit = Settlement − Purchase Cost. If OFF, RTO Profit = Settlement (₹0 since inventory returns; no loss of goods)."
-                checked={userSettings.rto?.chargeProductCostOnRTO ?? true}
+                checked={userSettings.rto?.chargeProductCostOnRTO ?? false}
                 onChange={(v) =>
                   updateUser({
                     rto: {
