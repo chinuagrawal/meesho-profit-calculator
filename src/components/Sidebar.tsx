@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
+import { preloadDashboardPage } from "@/lib/dashboardPages";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -102,6 +103,9 @@ export function Sidebar({
               key={to}
               to={to}
               end={to === "/"}
+              onMouseEnter={() => preloadDashboardPage(to)}
+              onFocus={() => preloadDashboardPage(to)}
+              onTouchStart={() => preloadDashboardPage(to)}
               onClick={onClose}
               className={({ isActive }) =>
                 cn(

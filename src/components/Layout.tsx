@@ -1,10 +1,11 @@
 import { AccountControls } from "./AccountControls";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Menu, Download, Upload } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { useApp } from "@/context/AppContext";
 import { useNavigate } from "react-router-dom";
+import { preloadDashboardPage } from "@/lib/dashboardPages";
 import { aggregateBySKU } from "@/calculations";
 import {
   formatDate,
@@ -242,6 +243,9 @@ export function Layout() {
             </div>
             <button
               aria-label="Import data"
+              onMouseEnter={() => preloadDashboardPage("/import")}
+              onFocus={() => preloadDashboardPage("/import")}
+              onTouchStart={() => preloadDashboardPage("/import")}
               onClick={() => navigate("/import")}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-slate-900 hover:bg-slate-800 text-white"
             >
@@ -252,7 +256,7 @@ export function Layout() {
         </header>
         <AccountControls />
         <main className="flex-1 p-4 md:p-6 overflow-x-hidden">
-          <Outlet />
+          <Suspense fallback={null}><Outlet /></Suspense>
         </main>
       </div>
     </div>
