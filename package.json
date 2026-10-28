@@ -5,20 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && npm run check:server && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
     "check": "npm run lint && npm test && npm run build",
     "test:rules": "vitest run tests/firestore.rules.test.ts",
-    "dev:api": "tsx watch server/dev.ts"
+    "dev:api": "tsx watch server/dev.ts",
+    "check:server": "node scripts/check-server-runtime.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "firebase": "12.6.0",
-    "firebase-admin": "^14.5.0",
+    "firebase-admin": "13.10.0",
     "idb": "^8.0.0",
     "lucide-react": "^0.441.0",
     "react": "^18.3.1",

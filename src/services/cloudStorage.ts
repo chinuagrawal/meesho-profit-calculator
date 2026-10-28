@@ -29,7 +29,10 @@ async function cloudRequest(uid: string, action: string, body?: unknown, params?
   if (response.status === 401 && !refresh) return cloudRequest(uid,action,body,params,true);
   let result;
   try { result = await response.json(); }
-  catch { throw new Error("The cloud API is unavailable. Deploy the Vercel backend, or run the local API server alongside Vite."); }
+  catch {
+    if (response.status >= 500) throw new Error(`Cloud storage is temporarily unavailable (server error ${response.status}). Your device data is unchanged. Please retry shortly.`);
+    throw new Error("The cloud API is unavailable. Deploy the Vercel backend, or run the local API server alongside Vite.");
+  }
   if (!response.ok) {
     const message = typeof result?.error === "string" ? result.error : "Cloud storage request failed.";
     if (response.status === 409) throw new CloudConflictError(message);

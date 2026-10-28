@@ -74,3 +74,7 @@ Saves use immutable chunks and a transactionally updated revision pointer. API r
 ### Verification
 
 `npm run check` type-checks both frontend and backend, runs lint/tests, and builds the frontend. Security-rule integration tests use the Firestore emulator: `npx firebase-tools@14.17.0 emulators:exec --only firestore --project demo-meesho-profit "npm run test:rules"`. The tests verify direct-client access is denied. Backend tests verify token scoping, conflict handling, validation, immutable chunks, and existing snapshot compatibility. Real SMS and production service-account permissions must be verified after deployment.
+
+### Vercel cold-start compatibility
+
+The backend pins Firebase Admin 13.10.0. The Firebase Admin 14 / jwks-rsa 4 / jose 6 dependency chain failed during module loading under the Vercel loader with `ERR_REQUIRE_ESM`. Every production build now imports the actual Admin SDK auth and Firestore entrypoints in a subprocess with CommonJS-to-ESM require support disabled. This reproduces the deployment constraint even on a newer development Node version and fails the build before a broken function can ship. Do not upgrade this dependency without passing `npm run check:server`.

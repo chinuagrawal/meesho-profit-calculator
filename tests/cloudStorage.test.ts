@@ -27,6 +27,10 @@ describe("authenticated cloud API client",()=>{
     fetchMock.mockResolvedValueOnce(reply({error:"Set server credentials"},503));await expect(loadCloudData("owner")).rejects.toThrow("Set server credentials");
   });
   it("does not access data after authentication switches accounts",async()=>{state.uid="other";await expect(loadCloudData("owner")).rejects.toThrow("login changed");expect(fetchMock).not.toHaveBeenCalled();});
+  it("reports a server cold-start failure without calling it a missing deployment",async()=>{
+    fetchMock.mockResolvedValueOnce(new Response("FUNCTION_INVOCATION_FAILED",{status:500}));
+    await expect(loadCloudData("owner")).rejects.toThrow("server error 500");
+  });
   it("detects altered cloud chunks",async()=>{
     const hash=await snapshotHash(splitSnapshot(accountFixture()).join(""));fetchMock.mockResolvedValueOnce(reply({state:{version:1,revision:1,snapshotId:"existing",chunkCount:1,hash}})).mockResolvedValueOnce(reply({payload:"tampered"}));await expect(loadCloudData("owner")).rejects.toThrow("integrity");
   });
