@@ -79,6 +79,7 @@ export default function LoginPage() {
         <div ref={captcha} className="captcha-slot" />
         <div className="auth-divider">YOUR ACCOUNT, YOUR NUMBERS</div>
         <div className="auth-security"><ShieldCheck size={15} strokeWidth={1.5} /> Private account. Saved across devices.</div>
+        <p className="auth-privacy">Authorized developer support can inspect saved calculator data in read-only mode for troubleshooting. Support access is logged.</p>
         <p className="auth-privacy">Protected by reCAPTCHA. Google's <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noreferrer">Terms of Service</a> apply.</p>
         <div className="auth-legacy"><button type="button" onClick={downloadOldData}><Download size={13} /> Moving from the old calculator? Download your data.</button><p>Your previous browser data stays untouched. Restore the backup in Settings after signing in.</p></div>
       </div>

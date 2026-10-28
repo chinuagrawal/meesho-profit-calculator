@@ -124,6 +124,7 @@ export function Sidebar({
 
         <div className="p-3 border-t border-sidebar-border text-[11px] text-sidebar-foreground/50">
           <div>Private account · Cloud storage</div>
+          <div className="mt-1" title="Authorized developer support can view saved calculator data in read-only mode for troubleshooting.">Developer support access is logged</div>
           <div className="mt-0.5">v1.0.0</div>
         </div>
       </aside>

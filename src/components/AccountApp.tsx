@@ -5,6 +5,7 @@ import LoginPage from "@/pages/LoginPage";
 
 const LandingPage = React.lazy(() => import("../pages/LandingPage"));
 const AccountDashboard = React.lazy(() => import("./AccountDashboard"));
+const AdminPage = React.lazy(() => import("../pages/AdminPage"));
 
 export function AccountApp() {
   const { user, initializing, error } = useAuth();
@@ -22,6 +23,7 @@ export function AccountApp() {
     const next = typeof from === "string" && from.startsWith("/") && !from.startsWith("//") && !from.startsWith("/login") ? from : "/";
     return <Navigate to={next} replace />;
   }
+  if (location.pathname === "/admin") return <React.Suspense fallback={null}><AdminPage key={user.uid} /></React.Suspense>;
   return <React.Suspense fallback={null}><AccountDashboard key={user.uid} uid={user.uid} /></React.Suspense>;
 }
 
