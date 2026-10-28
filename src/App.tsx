@@ -31,7 +31,7 @@ export default function App() {
   }
 
   return (
-    <Suspense fallback={<div className="p-6" role="status">Loading page...</div>}>
+    <Suspense fallback={null}>
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<DashboardPage />} />
