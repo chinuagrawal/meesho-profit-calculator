@@ -1,10 +1,10 @@
 # Meesho Profit Calculator
 
-Local-first analysis of Meesho payment spreadsheets using React, TypeScript and Vite. Data stays in IndexedDB and local storage in the current browser.
+Local-first analysis of Meesho payment spreadsheets using React, TypeScript and Vite. Phone OTP authentication protects access. Calculator data is cached per account on the device and automatically saved to private Cloud Firestore snapshots.
 
 ## Development
 
-Use Node.js 20 or later. Run `npm ci`, then `npm run dev`.
+Use Node.js 22. Run `npm ci`, then `npm run dev`.
 
 - `npm run check`: lint, regression tests and production build
 - `npm test`: calculation, import and backup regression tests
@@ -31,10 +31,46 @@ Break-even accepts zero desired profit. Packaging, overhead and expected return 
 
 ## Backups
 
-Export JSON regularly: browser data does not sync across devices. Restore validates the format and revives dates before modifying storage. Imported record collections are written together in one IndexedDB transaction. Restore rolls back settings if record persistence fails. Version 1 backups and compatible older unversioned backups are supported.
+Export JSON regularly. Signed-in account data syncs through Firestore; original legacy browser data must be explicitly restored into an account. Restore validates the format and revives dates before modifying storage. Imported record collections are written together in one IndexedDB transaction. Restore rolls back settings if record persistence fails. Version 1 backups and compatible older unversioned backups are supported.
 
 ## Meesho advertising amounts
 
 The Meesho Ads Cost sheet has a title on row 1, actual column headers on row 2, and an explanatory formula row on row 3. Only numeric transaction rows are imported. Dates are never parsed as money; summary rows are excluded. In Meesho's combined Credits / Waivers / Discounts format, net cost, GST and Total Ads Cost are signed settlement deductions. Their signs are reversed once for expense reporting, retaining refunds as expense reductions. Raw source cells remain unchanged for audit and legacy normalization.
 
 Older imports containing only the title column `Ads Cost` are malformed and excluded with an incomplete-data warning. Reimport every original report in merge mode to rebuild advertising expenses while preserving existing orders and SKU purchase costs. Reimported valid entries are deduplicated.
+
+## Firebase backend setup
+
+Phone OTP still uses Firebase Authentication's browser SDK. Calculator data travels through the same-origin Vercel `/api/cloud` endpoint. The Node.js backend verifies the Firebase ID token (including revocation), derives the user ID from that token, validates uploads, and uses the Firebase Admin SDK for Firestore. There is no direct browser Firestore access in the new code. Use Node.js 22 for deployment and CI.
+
+### Vercel environment variable
+
+In Vercel project Settings → Environment Variables, add `FIREBASE_SERVICE_ACCOUNT_KEY`. Its value is the complete contents of the downloaded Firebase service-account JSON, not a filename or path. Do not add extra quotes around the JSON. Select Production and Preview as appropriate, mark the variable Sensitive, save, and redeploy. Never prefix it with `VITE_`, commit the JSON, or send its contents in chat. The variable is read only by `server/firebaseAdmin.ts` at runtime. Alternatively, set the three server-only variables `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`; use one credential format, not both. The configured project must match `meesho-profit-calculator-99652` unless both the server and public client configuration are intentionally changed.
+
+The credential needs Firestore data access and permission to inspect Firebase Authentication users for revocation checks. Do not grant project Owner merely to make the app work. See [Admin SDK setup](https://firebase.google.com/docs/admin/setup).
+
+### Safe deployment order
+
+1. Set the server environment variable, push this code, and deploy to Vercel. The public web config is already included. Existing snapshots and account-specific device caches retain the same format.
+2. Test phone sign-in and a cloud save/reload on the deployed app. This validates the new API before disabling the older direct-client path.
+3. Publish the updated `firestore.rules` using `firebase deploy --only firestore:rules --project meesho-profit-calculator-99652` or the Console Rules editor. The updated file denies all browser access. The Admin SDK bypasses these rules, so authorization is enforced inside the API. Do not publish the new rules while the production app still uses the previous direct-Firestore code.
+
+Only source/config files have changed locally; the previously deployed owner-only rules are deliberately left in place until the backend deployment succeeds. No data migration is necessary for existing cloud snapshots.
+
+Authentication → Authorized domains must include `meesho-profit-calculator-atd.vercel.app`. Phone sign-in, SMS region policy, and linked billing must be configured in Firebase. Firebase test numbers avoid sending real SMS while testing. See [phone authentication](https://firebase.google.com/docs/auth/web/phone-auth) and [billing requirements](https://firebase.google.com/docs/auth/faq-and-troubleshooting).
+
+### Local development
+
+Install dependencies with `npm ci`. Run `npm run dev:api` and `npm run dev` in separate terminals. Vite proxies `/api` to the API process on `127.0.0.1:3001`. For server configuration, put the JSON variable in ignored `.env.local` (a single-quoted JSON value is supported by Node's env-file parser). Vercel environment variables do not automatically appear in local terminals. A Vite-only preview cannot serve the backend.
+
+### Existing browser data
+
+The login screen can download older local calculator data as a JSON backup. Sign in, then restore that JSON in Settings to copy it into your account. Unscoped browser data is never silently uploaded. Each UID has its own IndexedDB and local-storage caches. Signing out hides the dashboard but retains that account's device cache.
+
+### Cloud synchronization
+
+Saves use immutable chunks and a transactionally updated revision pointer. API requests stay below Vercel's payload limit. The server owns upload-session IDs, checks expiry, validates chunk sizes, validates the complete dataset and checksum, and rechecks the revision at commit. It never accepts a target user ID from the browser. Newer changes from another device pause syncing instead of being overwritten. Download a device backup and load the cloud version in Settings to resolve conflicts. Old snapshots are retained; clearing the active dataset does not purge historical snapshots.
+
+### Verification
+
+`npm run check` type-checks both frontend and backend, runs lint/tests, and builds the frontend. Security-rule integration tests use the Firestore emulator: `npx firebase-tools@14.17.0 emulators:exec --only firestore --project demo-meesho-profit "npm run test:rules"`. The tests verify direct-client access is denied. Backend tests verify token scoping, conflict handling, validation, immutable chunks, and existing snapshot compatibility. Real SMS and production service-account permissions must be verified after deployment.

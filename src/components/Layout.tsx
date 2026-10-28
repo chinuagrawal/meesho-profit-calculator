@@ -1,3 +1,4 @@
+import { AccountControls } from "./AccountControls";
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Menu, Download, Upload } from "lucide-react";
@@ -249,6 +250,7 @@ export function Layout() {
             </button>
           </div>
         </header>
+        <AccountControls />
         <main className="flex-1 p-4 md:p-6 overflow-x-hidden">
           <Outlet />
         </main>

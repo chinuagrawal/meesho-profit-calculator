@@ -1,3 +1,4 @@
+import { CloudStoragePanel } from "@/components/CloudStoragePanel";
 import { useMemo, useState, useRef } from "react";
 import {
   Settings,
@@ -145,6 +146,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
+      <CloudStoragePanel />
       <div>
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
           <Settings className="w-6 h-6 text-slate-700" />
@@ -471,7 +473,7 @@ export default function SettingsPage() {
             <Database className="w-5 h-5" /> Data
           </CardTitle>
           <CardDescription>
-            Backup & restore. All data is stored locally in your browser.
+            Backup & restore. Data is cached on this device and synced to your signed-in account.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

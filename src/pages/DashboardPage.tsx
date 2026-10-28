@@ -480,7 +480,7 @@ export default function DashboardPage() {
           {[
             {
               t: "1. Upload Report",
-              d: "Drag & drop your Meesho Excel. Everything runs locally in your browser.",
+              d: "Drag & drop your Meesho Excel. Processing runs in your browser; results sync to your account.",
               i: Upload,
             },
             {

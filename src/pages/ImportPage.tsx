@@ -145,7 +145,7 @@ export default function ImportPage() {
         <h1 className="text-2xl font-bold text-slate-900">Import Data</h1>
         <p className="text-slate-600 mt-1 text-sm">
           Upload your Meesho Excel payment report to begin. All processing happens
-          locally in your browser — no data is uploaded anywhere.
+          locally in your browser. Imported records are saved to your private cloud account.
         </p>
       </div>
 

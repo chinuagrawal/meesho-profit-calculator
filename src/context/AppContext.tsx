@@ -1,3 +1,5 @@
+import { useCloudSync } from "@/hooks/useCloudSync";
+import type { AppData } from "@/types";
 import { usableAds } from "@/lib/adIntegrity";
 import { mergeOrders, mergeEntries, parseBackup } from "@/services/dataIntegrity";
 import React, {
@@ -24,7 +26,7 @@ import {
   DateRange,
 } from "@/types";
 import {
-  storage,
+  createStorage,
   DEFAULT_GST_SETTINGS,
   DEFAULT_USER_SETTINGS,
 } from "@/services/storage";
@@ -39,6 +41,11 @@ interface AppContextValue {
   gstSettings: GSTSettings;
   userSettings: UserSettings;
   loading: boolean;
+  loadError: string | null;
+  cloudStatus: string;
+  cloudSyncError: string | null;
+  retryCloudSync: () => void;
+  loadCloudVersion: () => Promise<void>;
   enrichedOrders: OrderWithCalculations[];
   returnOverrides: Record<string, PerOrderReturnCondition>;
   dateFilterType: DateFilterType;
@@ -85,7 +92,9 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
+export function AppProvider({ children, uid }: { children: React.ReactNode; uid: string }) {
+  const storage = useMemo(() => createStorage(uid), [uid]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [ads, setAds] = useState<AdsCostEntry[]>([]);
   const [referrals, setReferrals] = useState<ReferralPayment[]>([]);
@@ -105,29 +114,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [customDateFrom, setCustomDateFrom] = useState<Date | null>(null);
   const [customDateTo, setCustomDateTo] = useState<Date | null>(null);
 
+  const accountData: AppData = useMemo(() => ({ orders, ads, referrals, compensations, skuCosts, gstSettings, userSettings, returnOverrides }), [orders, ads, referrals, compensations, skuCosts, gstSettings, userSettings, returnOverrides]);
+  const cloud = useCloudSync(uid, storage, accountData, loading);
   useEffect(() => {
-    (async () => {
-      try {
-        const [o, a, r, c] = await Promise.all([
-          storage.getAllOrders(),
-          storage.getAllAds(),
-          storage.getAllReferrals(),
-          storage.getAllCompensations(),
-        ]);
-        setOrders(o);
-        setAds(a.map(ad => usableAds([ad])[0] ?? ad));
-        setReferrals(r);
-        setCompensations(c);
-      } catch (err) {
-        console.error("Failed to load data from IndexedDB", err);
-      }
-      setSKUCosts(storage.getSKUCosts());
-      setGSTSettingsState(storage.getGSTSettings());
-      setUserSettingsState(storage.getUserSettings());
-      setReturnOverridesState(storage.getReturnOverrides());
+    let active = true;
+    void cloud.bootstrap().then(data => {
+      if (!active) return;
+      setOrders(data.orders); setAds(data.ads.map(ad => usableAds([ad])[0] ?? ad));
+      setReferrals(data.referrals); setCompensations(data.compensations);
+      setSKUCosts(data.skuCosts); setGSTSettingsState(data.gstSettings);
+      setUserSettingsState(data.userSettings); setReturnOverridesState(data.returnOverrides ?? {});
       setLoading(false);
-    })();
-  }, []);
+    }).catch(error => { if (active) setLoadError(error instanceof Error ? error.message : "Could not load account data. Check your connection and Firebase setup."); });
+    return () => { active = false; };
+  }, [cloud.bootstrap]);
 
   const importParsedData = useCallback(
     async (parsed: ParsedWorkbook, overwrite: boolean) => {
@@ -495,6 +495,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     gstSettings,
     userSettings,
     loading,
+    loadError,
+    cloudStatus: cloud.status,
+    cloudSyncError: cloud.error,
+    retryCloudSync: cloud.retry,
+    loadCloudVersion: cloud.loadCloudVersion,
     enrichedOrders,
     returnOverrides,
     dateFilterType,

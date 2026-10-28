@@ -30,7 +30,31 @@ interface MeeshoDB extends DBSchema {
   };
 }
 
-const DB_NAME = "meesho-profit-calculator";
+export const DEFAULT_GST_SETTINGS: GSTSettings = {
+  gstRegistered: true,
+  purchaseGSTRate: 18,
+  sellingGSTRate: 18,
+  itcEligible: true,
+};
+
+export const DEFAULT_USER_SETTINGS: UserSettings = {
+  currency: "INR",
+  adAllocationMethod: "equal",
+  defaultProfitView: "cash",
+  decimalPlaces: 2,
+  rto: {
+    rtoShippingCost: 0,
+    chargeProductCostOnRTO: true,
+  },
+  returnOrder: {
+    returnProductCondition: "usable",
+  },
+};
+
+
+
+export function createStorage(scope?: string) {
+const DB_NAME = scope ? `meesho-profit-calculator:${scope}` : "meesho-profit-calculator";
 const DB_VERSION = 1;
 
 let dbPromise: Promise<IDBPDatabase<MeeshoDB>> | null = null;
@@ -61,34 +85,12 @@ function getDB() {
   return dbPromise;
 }
 
-const LS_SKU_COSTS = "mpc_sku_costs";
-const LS_GST_SETTINGS = "mpc_gst_settings";
-const LS_USER_SETTINGS = "mpc_user_settings";
+const LS_SKU_COSTS = scope ? `mpc_sku_costs:${scope}` : "mpc_sku_costs";
+const LS_GST_SETTINGS = scope ? `mpc_gst_settings:${scope}` : "mpc_gst_settings";
+const LS_USER_SETTINGS = scope ? `mpc_user_settings:${scope}` : "mpc_user_settings";
 
-export const DEFAULT_GST_SETTINGS: GSTSettings = {
-  gstRegistered: true,
-  purchaseGSTRate: 18,
-  sellingGSTRate: 18,
-  itcEligible: true,
-};
-
-export const DEFAULT_USER_SETTINGS: UserSettings = {
-  currency: "INR",
-  adAllocationMethod: "equal",
-  defaultProfitView: "cash",
-  decimalPlaces: 2,
-  rto: {
-    rtoShippingCost: 0,
-    chargeProductCostOnRTO: true,
-  },
-  returnOrder: {
-    returnProductCondition: "usable",
-  },
-};
-
-const LS_RETURN_OVERRIDES = "mpc_return_overrides";
-
-export const storage = {
+const LS_RETURN_OVERRIDES = scope ? `mpc_return_overrides:${scope}` : "mpc_return_overrides";
+return {
   async getAllOrders(): Promise<Order[]> {
     const db = await getDB();
     return db.getAll("orders");
@@ -318,3 +320,6 @@ export const storage = {
     localStorage.removeItem(LS_RETURN_OVERRIDES);
   },
 };
+}
+
+export const storage = createStorage();

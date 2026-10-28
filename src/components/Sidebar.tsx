@@ -119,7 +119,7 @@ export function Sidebar({
         </nav>
 
         <div className="p-3 border-t border-sidebar-border text-[11px] text-sidebar-foreground/50">
-          <div>Data stays in your browser</div>
+          <div>Private account · Cloud storage</div>
           <div className="mt-0.5">v1.0.0</div>
         </div>
       </aside>

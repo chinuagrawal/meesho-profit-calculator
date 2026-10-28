@@ -66,5 +66,6 @@ export function parseBackup(json: string): AppData {
   if (typeof settings.currency !== "string" || !["cash", "accounting", "net"].includes(settings.defaultProfitView) || !Number.isInteger(settings.decimalPlaces) || settings.decimalPlaces < 0 || settings.decimalPlaces > 6) throw new Error("Invalid display settings");
   if (settings.rto && (typeof settings.rto.chargeProductCostOnRTO !== "boolean" || typeof settings.rto.rtoShippingCost !== "number" || settings.rto.rtoShippingCost < 0)) throw new Error("Invalid RTO settings");
   if (settings.returnOrder && !["usable", "damaged", "manual"].includes(settings.returnOrder.returnProductCondition)) throw new Error("Invalid return settings");
-  return data;
+  const { orders, ads, referrals, compensations, skuCosts, gstSettings, userSettings, returnOverrides } = data;
+  return { orders, ads, referrals, compensations, skuCosts, gstSettings, userSettings, returnOverrides };
 }

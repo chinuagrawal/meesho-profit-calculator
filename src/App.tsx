@@ -1,3 +1,4 @@
+import { useAuth } from "@/context/AuthContext";
 import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
@@ -15,7 +16,9 @@ const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 import { useApp } from "@/context/AppContext";
 
 export default function App() {
-  const { loading } = useApp();
+  const { loading, loadError } = useApp();
+  const { logout } = useAuth();
+  if (loadError) return <main className="min-h-screen p-6 bg-slate-50"><div className="max-w-lg mx-auto rounded-xl bg-white border p-5 space-y-3"><h1 className="font-semibold">Could not open your account data</h1><p role="alert">{loadError}</p><p className="text-sm text-slate-500">Your device data has not been replaced. Check Firestore setup and your connection before retrying.</p><button className="underline" onClick={() => window.location.reload()}>Retry</button> <button className="underline" onClick={() => { void logout().catch(() => window.location.reload()); }}>Sign out</button></div></main>;
 
   if (loading) {
     return (
