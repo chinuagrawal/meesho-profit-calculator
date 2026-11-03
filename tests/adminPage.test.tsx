@@ -8,8 +8,8 @@ const api = vi.hoisted(() => ({ list: vi.fn(), load: vi.fn() }));
 vi.mock("@/services/adminStorage", () => ({ listAdminAccounts: api.list, loadAdminAccount: api.load, AdminAccessError: class extends Error {} }));
 import AdminPage from "@/pages/AdminPage";
 import { AdminAccessError } from "@/services/adminStorage";
-const a = { uid: "A", phoneNumber: "+919999999991", email: null, disabled: false, createdAt: "2026-01-01", lastSignInAt: null };
-const b = { ...a, uid: "B", phoneNumber: "+919999999992" };
+const a = { uid: "A", phoneNumber: "+919999999991", email: null, fullName: "Sample Seller", storeName: "Sample Shop", disabled: false, createdAt: "2026-01-01", lastSignInAt: null };
+const b = { ...a, uid: "B", phoneNumber: "+919999999992", fullName: "Other Seller", storeName: "Other Shop" };
 beforeEach(() => { vi.resetAllMocks(); api.list.mockResolvedValue({ users: [a, b], nextPageToken: null }); });
 afterEach(cleanup);
 function open() { render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><AdminPage /></MemoryRouter>); }
@@ -40,4 +40,12 @@ it("clears the account list when backend authorization is denied", async () => {
   api.list.mockRejectedValue(new AdminAccessError("Access denied")); open();
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(screen.queryByRole("button", { name: /9999999991/ })).toBeNull();
+});
+it("shows and searches account full names and store names", async () => {
+  open(); await screen.findByRole("button", { name: /Sample Shop Sample Seller/ });
+  fireEvent.change(screen.getByLabelText("Search loaded accounts"), { target: { value: "Sample Seller" } });
+  expect(screen.getByRole("button", { name: /Sample Shop/ })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Other Shop/ })).toBeNull();
+  fireEvent.change(screen.getByLabelText("Search loaded accounts"), { target: { value: "Other Shop" } });
+  expect(screen.getByRole("button", { name: /Other Seller/ })).toBeTruthy();
 });

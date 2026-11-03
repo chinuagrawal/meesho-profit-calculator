@@ -1,4 +1,5 @@
 import { CloudStoragePanel } from "@/components/CloudStoragePanel";
+import { AccountProfileCard } from "@/components/AccountProfileCard";
 import { useMemo, useState, useRef } from "react";
 import {
   Settings,
@@ -146,6 +147,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
+      <AccountProfileCard />
       <CloudStoragePanel />
       <div>
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">

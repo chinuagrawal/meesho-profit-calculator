@@ -2,10 +2,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { ApiError } from "./cloudRepository.js";
 import { BackendConfigurationError } from "./adminCredentials.js";
 import type { createCloudRepository } from "./cloudRepository.js";
+import type { createAccountProfileRepository } from "./accountProfileRepository.js";
 export interface ApiRequest extends IncomingMessage { body?: unknown }
 export interface CloudDependencies {
   verifyToken: (token: string) => Promise<{uid: string}>;
   repository: () => ReturnType<typeof createCloudRepository>;
+  profileRepository?: () => ReturnType<typeof createAccountProfileRepository>;
 }
 async function readBody(request: ApiRequest): Promise<Record<string, unknown>> {
   if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) throw new ApiError(415,"Send JSON data.");
@@ -52,10 +54,12 @@ export function createCloudHandler(dependencies: CloudDependencies) {
       if ([...url.searchParams.keys()].some(key => !allowed.includes(key))) throw new ApiError(400,"Unexpected query parameters.");
       const repository = dependencies.repository();
       if (request.method === "GET") {
+        if (action === "profile" && dependencies.profileRepository) return send(200,{profile:await dependencies.profileRepository().get(uid)});
         if (action === "state") return send(200,{state:await repository.metadata(uid)});
         if (action === "chunk") return send(200,await repository.chunk(uid,url.searchParams.get("snapshotId"),url.searchParams.get("index")));
       } else {
         const body = await readBody(request);
+        if (action === "profile" && dependencies.profileRepository) return send(200,{profile:await dependencies.profileRepository().save(uid,body)});
         if (action === "begin") return send(200,await repository.begin(uid,body));
         if (action === "chunk") return send(200,await repository.upload(uid,body));
         if (action === "commit") return send(200,await repository.commit(uid,body));

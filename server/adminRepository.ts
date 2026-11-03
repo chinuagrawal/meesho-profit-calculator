@@ -2,9 +2,12 @@ import type { Auth, UserRecord } from "firebase-admin/auth";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { ApiError, createCloudRepository } from "./cloudRepository.js";
 import type { AdminAccount } from "../src/types/admin.js";
+import type { AccountProfile } from "../src/lib/accountProfile.js";
+import { profilePath, storedProfile } from "./accountProfileRepository.js";
 
-function account(user: UserRecord): AdminAccount {
+function account(user: UserRecord, profile?: AccountProfile | null): AdminAccount {
   return { uid: user.uid, phoneNumber: user.phoneNumber ?? null, email: user.email ?? null,
+    fullName: profile?.fullName ?? null, storeName: profile?.storeName ?? null,
     createdAt: user.metadata.creationTime, lastSignInAt: user.metadata.lastSignInTime || null, disabled: user.disabled };
 }
 
@@ -18,8 +21,9 @@ export function createAdminRepository(db: Firestore, auth: Auth) {
   return {
     async users(actorUid: string, pageToken?: string) {
       const result = await auth.listUsers(50, pageToken);
+      const profiles = result.users.length ? await db.getAll(...result.users.map(user => db.doc(profilePath(user.uid)))) : [];
       await audit(actorUid, "list_accounts");
-      return { users: result.users.map(account), nextPageToken: result.pageToken ?? null };
+      return { users: result.users.map((user, index) => account(user, profiles[index]?.exists ? storedProfile(profiles[index].data()) : null)), nextPageToken: result.pageToken ?? null };
     },
     async state(actorUid: string, targetUid: string) {
       let user: UserRecord;
@@ -29,10 +33,11 @@ export function createAdminRepository(db: Firestore, auth: Auth) {
         throw error;
       }
       const state = await cloud.metadata(targetUid);
+      const profile = await db.doc(profilePath(targetUid)).get();
       await audit(actorUid, "view_account", targetUid, state?.snapshotId);
       // Firestore Timestamp is not part of the portable snapshot protocol.
       const updatedAt = (state as unknown as { updatedAt?: { toDate?: () => Date } } | null)?.updatedAt?.toDate?.().toISOString() ?? null;
-      return { account: account(user), state, updatedAt };
+      return { account: account(user, profile.exists ? storedProfile(profile.data()) : null), state, updatedAt };
     },
     async chunk(actorUid: string, targetUid: string, snapshotId: string, index: string) {
       const state = await cloud.metadata(targetUid);

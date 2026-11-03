@@ -10,7 +10,7 @@ function requireAccount(uid: string) {
   if (auth.currentUser?.uid !== uid) throw new Error("Your login changed. Sign in again before syncing.");
   return auth.currentUser;
 }
-async function cloudRequest(uid: string, action: string, body?: unknown, params?: Record<string,string>, refresh = false): Promise<any> {
+export async function cloudRequest(uid: string, action: string, body?: unknown, params?: Record<string,string>, refresh = false): Promise<any> {
   const token = await requireAccount(uid).getIdToken(refresh);
   requireAccount(uid);
   const query = new URLSearchParams({action, ...params});

@@ -7,9 +7,11 @@ import { createAdminRepository } from "../server/adminRepository";
 const add = vi.fn();
 const listUsers = vi.fn();
 const getUser = vi.fn();
-const repository = createAdminRepository({ collection: () => ({ add }) } as unknown as Firestore, { listUsers, getUser } as unknown as Auth);
+const getProfile = vi.fn();
+const getProfiles = vi.fn();
+const repository = createAdminRepository({ collection: () => ({ add }), doc: () => ({ get: getProfile }), getAll: getProfiles } as unknown as Firestore, { listUsers, getUser } as unknown as Auth);
 const user = { uid: "customer", phoneNumber: "+919999999999", email: "user@example.test", disabled: false, passwordHash: "never-return-this", metadata: { creationTime: "2026-01-01", lastSignInTime: "2026-02-01" } };
-beforeEach(() => { vi.resetAllMocks(); add.mockResolvedValue({}); getUser.mockResolvedValue(user); });
+beforeEach(() => { vi.resetAllMocks(); add.mockResolvedValue({}); getUser.mockResolvedValue(user); getProfile.mockResolvedValue({ exists: false }); getProfiles.mockResolvedValue([{ exists: true, data: () => ({ fullName: "Sample Seller", storeName: "Sample Store" }) }]); });
 describe("admin data reads and audits", () => {
   it("lists paginated sanitized users and logs the actor", async () => {
     listUsers.mockResolvedValue({ users: [user], pageToken: "next" });
@@ -17,6 +19,8 @@ describe("admin data reads and audits", () => {
     expect(listUsers).toHaveBeenCalledWith(50, "cursor");
     expect(result.nextPageToken).toBe("next");
     expect(result.users[0]).not.toHaveProperty("passwordHash");
+    expect(result.users[0].fullName).toBe("Sample Seller");
+    expect(result.users[0].storeName).toBe("Sample Store");
     expect(add).toHaveBeenCalledWith(expect.objectContaining({ actorUid: "owner", action: "list_accounts" }));
   });
   it("logs target account and snapshot before returning metadata", async () => {

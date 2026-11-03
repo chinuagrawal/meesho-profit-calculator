@@ -7,6 +7,7 @@ const state=vi.hoisted(()=>({user:null as null|{uid:string}}));
 vi.mock("@/context/AuthContext",()=>({useAuth:()=>({user:state.user,initializing:false,error:null})}));
 vi.mock("@/pages/LoginPage",()=>({default:()=> <h1>Phone login</h1>}));
 vi.mock("@/components/AccountDashboard",()=>({default:()=> <h1>Account dashboard</h1>}));
+vi.mock("@/components/AccountProfileGate",()=>({default:({children}:{children:React.ReactNode})=> <>{children}</>}));
 import { AccountApp } from "@/components/AccountApp";
 function Location(){const location=useLocation();return <span data-testid="location">{location.pathname+location.search}</span>;}
 beforeEach(()=>{state.user=null;window.scrollTo=vi.fn();});afterEach(()=>cleanup());

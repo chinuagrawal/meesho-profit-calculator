@@ -75,6 +75,10 @@ Saves use immutable chunks and a transactionally updated revision pointer. API r
 
 `npm run check` type-checks both frontend and backend, runs lint/tests, and builds the frontend. Security-rule integration tests use the Firestore emulator: `npx firebase-tools@14.17.0 emulators:exec --only firestore --project demo-meesho-profit "npm run test:rules"`. The tests verify direct-client access is denied. Backend tests verify token scoping, conflict handling, validation, immutable chunks, and existing snapshot compatibility. Real SMS and production service-account permissions must be verified after deployment.
 
+### Signup account details
+
+After phone OTP verification, users without a profile must save their full name and Meesho store name before opening the dashboard. Returning users with a complete profile skip this step. Both fields are validated and saved via authenticated `/api/cloud?action=profile` to `users/{verifiedUid}/profile/details`, with server-owned creation/update timestamps. The API never accepts a target UID for profile reads or writes. Profiles stay separate from calculator snapshots, so clearing or restoring calculator data cannot replace account identity. Users can edit the details in Settings; the dashboard toolbar and audited admin account list display them. Account-list search includes both full name and store name. No extra Firebase or Vercel setup is needed.
+
 ### Read-only developer administration
 
 The `/admin` workspace lists Firebase Authentication accounts and reads their latest committed calculator snapshots through `/api/admin`. Sign in normally using the owner account, then choose **Admin panel** in the account toolbar. The owner UID explicitly authorized for this project is configured only in `api/admin.ts`. Optionally set server-only `FIREBASE_ADMIN_UIDS` to a comma-separated replacement allowlist; an explicitly empty value disables access. Never infer admin rights from a phone number, URL parameter, client storage or a browser-only role.

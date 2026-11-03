@@ -64,7 +64,7 @@ export default function LoginPage() {
       <div className="auth-form-wrap">
         <div className="auth-stepper" aria-label={confirmation ? "Step 2 of 2: verify code" : "Step 1 of 2: your number"}><span className={!confirmation ? "is-active" : ""}><i>01</i> YOUR NUMBER</span><span className={confirmation ? "is-active" : ""}><i>02</i> VERIFY CODE</span></div>
         <h1>{confirmation ? <>Check your phone.<br /><em>You're almost in.</em></> : <>A fresh look at<br /><em>your business.</em></>}</h1>
-        <p className="auth-form-subtitle">{confirmation ? "One little code, and your dashboard is ready." : "Sign in or create your account with a one-time code. No password to remember."}</p>
+        <p className="auth-form-subtitle">{confirmation ? "Verify your phone to continue. New accounts will then add a full name and store name." : "Sign in or create your account with a one-time code. New here? Add your full name and store name after verification."}</p>
         {error && <div role="alert" className="auth-alert"><CircleAlert size={16} /><span>{error}</span></div>}
         {!confirmation ? <form onSubmit={send}>
           <div><label htmlFor="auth-phone" className="auth-label">Phone number</label><div className="auth-input-wrap"><Phone size={18} strokeWidth={1.5} /><input id="auth-phone" className="auth-input" type="tel" autoComplete="tel" placeholder="+91 98765 43210" required value={phone} onChange={e => setPhone(e.target.value)} disabled={busy} aria-describedby="auth-phone-hint" /></div><p id="auth-phone-hint" className="auth-input-hint">Include your country code. We'll send a 6-digit SMS code.</p></div>
