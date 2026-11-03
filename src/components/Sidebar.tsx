@@ -17,6 +17,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
 import { preloadDashboardPage } from "@/lib/dashboardPages";
+import { useAccountProfile } from "./AccountProfileGate";
+import { StoreIdentityCard } from "./StoreIdentityCard";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -40,6 +42,7 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const navigate = useNavigate();
+  const account = useAccountProfile();
   const { skuCosts, orders } = useApp();
   const missingCosts = skuCosts.filter(
     (s) => s.purchaseCostInclGST === null || s.purchaseCostInclGST === undefined
@@ -59,7 +62,7 @@ export function Sidebar({
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
+        <div className="flex shrink-0 items-center justify-between p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-white" />
@@ -80,6 +83,8 @@ export function Sidebar({
           </button>
         </div>
 
+        {account && <StoreIdentityCard profile={account.profile} onClose={onClose} />}
+
         {missingCosts > 0 && orders.length > 0 && (
           <div
             className="mx-3 mt-3 p-3 rounded-lg bg-yellow-500/15 border border-yellow-500/30 cursor-pointer hover:bg-yellow-500/25"
@@ -97,7 +102,7 @@ export function Sidebar({
           </div>
         )}
 
-        <nav className="flex-1 overflow-y-auto p-3 scrollbar-thin space-y-1">
+        <nav className="min-h-0 flex-1 overflow-y-auto p-3 scrollbar-thin space-y-1">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -122,7 +127,7 @@ export function Sidebar({
           ))}
         </nav>
 
-        <div className="p-3 border-t border-sidebar-border text-[11px] text-sidebar-foreground/50">
+        <div className="shrink-0 p-3 border-t border-sidebar-border text-[11px] text-sidebar-foreground/50">
           <div>Private account · Cloud storage</div>
           <div className="mt-1" title="Authorized developer support can view saved calculator data in read-only mode for troubleshooting.">Developer support access is logged</div>
           <div className="mt-0.5">v1.0.0</div>
