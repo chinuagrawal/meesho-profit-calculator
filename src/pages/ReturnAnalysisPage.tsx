@@ -31,13 +31,12 @@ export default function ReturnAnalysisPage() {
       <DateRangeFilter />
     </header>
     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-      Overall return rate = (customer returns + RTOs) ÷ non-cancelled orders. Rates count orders, not units; shipped, pending and other statuses remain in the denominator. Dates refer to order dates, not the date a return occurred.
+      Customer return rate = customer returns / non-cancelled orders. RTO rate = RTOs / non-cancelled orders. These percentages are separate. Rates count orders, not units; shipped, pending and other statuses remain in the denominator. Dates refer to order dates, not the date a return occurred.
     </div>
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {[
-        ["Overall return rate", formatPercent(summary.overallRate), `${summary.total} of ${summary.eligible} non-cancelled orders`],
-        ["Customer returns", String(summary.returned), `${formatPercent(summary.returnRate)} of non-cancelled orders`],
-        ["RTO orders", String(summary.rto), `${formatPercent(summary.rtoRate)} of non-cancelled orders`],
+        ["Customer return rate", formatPercent(summary.returnRate), `${summary.returned} customer returns / ${summary.eligible} non-cancelled orders`],
+        ["RTO rate", formatPercent(summary.rtoRate), `${summary.rto} RTOs / ${summary.eligible} non-cancelled orders`],
         ["Return / RTO net profit", formatINR(summary.netProfit), summary.missingProfit ? `Partial: ${summary.missingProfit} orders lack calculable profit` : "Includes attributed ads; excludes unallocated ads"],
       ].map(([label, value, note]) => <Card key={label}><CardContent className="p-5"><p className="text-xs uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-2xl font-bold break-words">{value}</p><p className="mt-2 text-xs text-slate-500">{note}</p></CardContent></Card>)}
     </div>
@@ -71,8 +70,8 @@ export default function ReturnAnalysisPage() {
 function Breakdown({ title, rows, monthly = false }: { title: string; rows: ReturnType<typeof groupReturns>; monthly?: boolean }) {
   return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent>
     <div className="overflow-auto max-h-96"><table className="w-full text-sm text-left">
-      <thead className="bg-slate-50 sticky top-0"><tr>{[monthly ? "Order month" : "SKU", "Non-cancelled", "Customer returns", "RTOs", "Overall rate", "Net profit (returns + RTO)"].map(label => <th className="p-3 whitespace-nowrap" key={label}>{label}</th>)}</tr></thead>
-      <tbody>{rows.map(row => <tr key={row.key} className="border-t"><td className="p-3 max-w-xs break-words">{monthly ? monthLabel(row.key) : row.key}</td><td className="p-3">{row.eligible}</td><td className="p-3">{row.returned}</td><td className="p-3">{row.rto}</td><td className="p-3 font-semibold">{formatPercent(row.overallRate)}</td><td className="p-3 whitespace-nowrap">{formatINR(row.netProfit)}{row.missingProfit > 0 && <span className="block text-xs text-amber-700">Partial · {row.missingProfit} uncalculated</span>}</td></tr>)}</tbody>
+      <thead className="bg-slate-50 sticky top-0"><tr>{[monthly ? "Order month" : "SKU", "Non-cancelled", "Customer returns", "RTOs", "Customer return rate", "RTO rate", "Net profit (returns + RTO)"].map(label => <th className="p-3 whitespace-nowrap" key={label}>{label}</th>)}</tr></thead>
+      <tbody>{rows.map(row => <tr key={row.key} className="border-t"><td className="p-3 max-w-xs break-words">{monthly ? monthLabel(row.key) : row.key}</td><td className="p-3">{row.eligible}</td><td className="p-3">{row.returned}</td><td className="p-3">{row.rto}</td><td className="p-3 font-semibold">{formatPercent(row.returnRate)}</td><td className="p-3 font-semibold">{formatPercent(row.rtoRate)}</td><td className="p-3 whitespace-nowrap">{formatINR(row.netProfit)}{row.missingProfit > 0 && <span className="block text-xs text-amber-700">Partial · {row.missingProfit} uncalculated</span>}</td></tr>)}</tbody>
     </table></div>
   </CardContent></Card>;
 }

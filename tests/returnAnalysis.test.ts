@@ -23,6 +23,12 @@ describe("return analysis", () => {
     expect(summarizeReturns(orders(["Cancelled"])).overallRate).toBeNull();
     expect(summarizeReturns(orders(["Returned", "RTO"])).overallRate).toBe(100);
   });
+  it("does not count RTOs as customer returns", () => {
+    const result = summarizeReturns(orders(["Delivered", "RTO", "RTO", "Cancelled"]));
+    expect(result.returned).toBe(0);
+    expect(result.returnRate).toBe(0);
+    expect(result.rtoRate).toBeCloseTo(200 / 3);
+  });
   it("keeps undated orders and missing profit visible in groups", () => {
     const rows = orders(["Returned", "Delivered", "RTO"]);
     rows[0].orderDate = null;

@@ -245,7 +245,7 @@ export default function DashboardPage() {
       (o) => o.liveOrderStatus === "Shipped",
     ).length;
     const successful = delivered + shipped;
-    const { returnRate, rtoRate, overallRate } = summarizeReturns(filteredEnrichedOrders);
+    const { returnRate, rtoRate } = summarizeReturns(filteredEnrichedOrders);
 
     const missingCosts = skuCosts.filter(
       (s) =>
@@ -303,7 +303,6 @@ export default function DashboardPage() {
       adSpend,
       netProfit,
       profitMargin,
-      overallRate,
       returnRate,
       rtoRate,
       missingCosts,
@@ -618,11 +617,11 @@ export default function DashboardPage() {
           }
         />
         <Kpi
-          title="Overall Return Rate"
-          value={formatPercent(totals.overallRate)}
+          title="Customer Return Rate"
+          value={formatPercent(totals.returnRate)}
           icon={RotateCcw}
-          tone={totals.returns + totals.rto > 0 ? "warn" : "good"}
-          subtitle={`${totals.returns} customer returns + ${totals.rto} RTOs / ${totals.totalOrders - totals.cancellations} non-cancelled orders`}
+          tone={totals.returns > 0 ? "warn" : "good"}
+          subtitle={`${totals.returns} customer returns / ${totals.totalOrders - totals.cancellations} non-cancelled orders`}
           footer={<Link to="/returns" className="mt-2 inline-block text-xs font-semibold text-emerald-700 underline">View return analysis</Link>}
         />
         <Kpi
