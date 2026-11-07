@@ -23,6 +23,7 @@ import { StoreIdentityCard } from "./StoreIdentityCard";
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/orders", label: "Orders", icon: ShoppingBag },
+  { to: "/returns", label: "Return Analysis", icon: RefreshCcw },
   { to: "/sku-analysis", label: "SKU Analysis", icon: BarChart3 },
   { to: "/sku-costs", label: "SKU Costs", icon: Tag },
   { to: "/advertising", label: "Advertising", icon: Megaphone },

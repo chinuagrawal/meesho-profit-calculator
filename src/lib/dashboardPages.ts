@@ -12,6 +12,7 @@ export function cachedPage<T>(load: () => Promise<T>): () => Promise<T> {
 
 export const dashboardPages = [
   { path: "/", load: cachedPage(() => import("@/pages/DashboardPage")) },
+  { path: "/returns", load: cachedPage(() => import("@/pages/ReturnAnalysisPage")) },
   { path: "/orders", load: cachedPage(() => import("@/pages/OrdersPage")) },
   { path: "/sku-analysis", load: cachedPage(() => import("@/pages/SKUAnalysisPage")) },
   { path: "/sku-costs", load: cachedPage(() => import("@/pages/SKUCostsPage")) },
